@@ -1,1 +1,3 @@
-__all__ = ['KWPCommand', 'KWPResponse', 'KWPStatus']
+from .KWPCommand import *
+from .KWPResponse import *
+from .KWPStatus import *
