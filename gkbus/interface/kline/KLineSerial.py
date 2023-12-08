@@ -91,3 +91,6 @@ class KLineSerial:
 		message = self.socket.read(length)
 
 		return message
+
+	def shutdown (self) -> None:
+		self.socket.close()

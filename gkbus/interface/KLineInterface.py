@@ -1,10 +1,11 @@
 import os, time, logging
 from .kline.KLineSerial import KLineSerial
 from ..kwp.KWPResponse import KWPResponse
+from .Interface import InterfaceABC
 
 logger = logging.getLogger(__name__)
 
-class KLineInterface:
+class KLineInterface(InterfaceABC):
 	socket = False
 
 	def __init__ (self, interface, baudrate, rx_id, tx_id):
@@ -16,6 +17,9 @@ class KLineInterface:
 			os.remove('kline.log')
 		except OSError:
 			pass
+
+	def init (self) -> None:
+		self.socket.init()
 
 	def calculate_checksum (self, payload):
 		checksum = 0x0
@@ -70,7 +74,7 @@ class KLineInterface:
 		return KWPResponse().set_status(status).set_data(data)
 
 
-	def execute (self, kwp_command):
+	def _execute_internal (self, kwp_command):
 		# first byte 8 + length 
 		# byte 2,3 = tx id
 		# 4th byte command 
@@ -83,7 +87,6 @@ class KLineInterface:
 		if (response == False):
 			logger.warning('Timeout! returning []')
 			return KWPResponse().set_data([])
-
 
 		return response
 
@@ -102,3 +105,6 @@ class KLineInterface:
 	def log (self, message):
 		with open('kline.log', 'ab') as file:
 			file.write(message)
+
+	def shutdown (self) -> None:
+		self.socket.shutdown()
