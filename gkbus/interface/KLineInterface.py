@@ -70,7 +70,7 @@ class KLineInterface(InterfaceABC):
 
 		#if (self.calculate_checksum()) todo
 
-		return [status] + data
+		return [int.from_bytes(status, "big")] + data
 
 	def _execute_internal (self, payload: list[int]) -> list[int]:
 		self._write(self.build_payload(payload))

@@ -1,5 +1,5 @@
 from abc import ABCMeta
-from ..kwp import KWPCommand, KWPResponse, KWPStatus
+from ..kwp import KWPCommand, KWPResponse, KWPNegativeStatus, KWPNegativeResponseException
 
 class InterfaceABC(metaclass=ABCMeta):
 	def init (self) -> None:
@@ -13,7 +13,15 @@ class InterfaceABC(metaclass=ABCMeta):
 		if (len(response) == 0): # timeout. todo!
 			return KWPResponse()
 
-		return KWPResponse().set_status(KWPStatus(response[0])).set_data(response[1:])
+		status = response[0]
+		if ( status == (kwp_command.command + 0x40) ): # positive response
+			return KWPResponse().set_data(response[1:])
+		elif (status == 0x7F): # negative response
+			negative_responses = [KWPNegativeStatus(code) for code in response[1:]]
+			exception_str = ', '.join(negative_responses)
+			raise KWPNegativeResponseException('Negative response: %s', exception_str)
+		else: # this probably shouldnt happen? 
+			raise Exception('Neither negative, nor positive response. This probably shouldn\'t happen.')
 
 	def shutdown (self) -> None:
 		"""Clean up, stop communication, close interfaces"""

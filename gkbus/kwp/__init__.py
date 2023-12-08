@@ -1,3 +1,6 @@
 from .KWPCommand import *
 from .KWPResponse import *
-from .KWPStatus import *
+from .KWPNegativeStatus import *
+
+class KWPNegativeResponseException (Exception):
+	pass

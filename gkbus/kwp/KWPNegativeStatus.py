@@ -1,4 +1,4 @@
-KWP2000_status_def = {
+KWP2000_negative_status_def = {
 	0x10: 'General Reject',
 	0x11: 'Service Not Supported',
 	0x12: 'Sub Function Not Supported / Invalid Format',
@@ -31,14 +31,14 @@ KWP2000_status_def = {
 	# 0xFF - reserved for future use by iso 14230
 }
 
-class KWPStatus:
+class KWPNegativeStatus:
 	code = 0x0 
 	name = ''
 
 	def __init__ (self, code):
 		self.code = code
 		try:
-			self.name = KWP2000_status_def[code]
+			self.name = KWP2000_negative_status_def[code]
 		except KeyError:
 			self.name = 'Unknown' # todo: raise exception?
 
