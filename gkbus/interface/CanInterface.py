@@ -8,8 +8,8 @@ from ..kwp.KWPResponse import KWPResponse
 class CanInterface:
 	socket = False
 
-	def __init__ (self, rx_id, tx_id, iface='can0'):
-		self.socket = ISOTPNativeSocket(iface=iface, tx_id=tx_id, rx_id=rx_id, padding=True)
+	def __init__ (self, rx_id, tx_id, interface='can0'):
+		self.socket = ISOTPNativeSocket(iface=interface, tx_id=tx_id, rx_id=rx_id, padding=True)
 
 	def execute (self, kwp_command):
 		data = [kwp_command.command] + kwp_command.data

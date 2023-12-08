@@ -7,11 +7,11 @@ logger = logging.getLogger(__name__)
 class KLineInterface:
 	socket = False
 
-	def __init__ (self, iface, baudrate, rx_id, tx_id):
-		print('    [K] K-line init. Iface: {} baudrate: {}'.format(iface, baudrate))
+	def __init__ (self, interface, baudrate, rx_id, tx_id):
+		print('    [K] K-line init. Iface: {} baudrate: {}'.format(interface, baudrate))
 		self.rx_id = rx_id
 		self.tx_id = tx_id
-		self.socket = KLineSerial(iface, baudrate=baudrate)
+		self.socket = KLineSerial(interface, baudrate=baudrate)
 		try:
 			os.remove('kline.log')
 		except OSError:
