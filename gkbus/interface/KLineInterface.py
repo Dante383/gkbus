@@ -20,13 +20,13 @@ class KLineInterface(InterfaceABC):
 	def init (self) -> None:
 		self.socket.init()
 
-	def calculate_checksum (self, payload):
+	def calculate_checksum (self, payload: list[int]) -> int:
 		checksum = 0x0
 		for byte in payload:
 			checksum += byte
 		return checksum & 0xFF
 
-	def build_payload (self, data):
+	def build_payload (self, data: list[int]) -> bytearray:
 		data_length = len(data)
 
 		if (data_length < 127):
@@ -42,7 +42,7 @@ class KLineInterface(InterfaceABC):
 		payload += [self.calculate_checksum(payload)]
 		return bytes(payload)
 
-	def fetch_response (self):
+	def fetch_response (self) -> list[int]:
 		counter = self._read(1)
 
 		if (len(counter) == 0):
@@ -72,7 +72,7 @@ class KLineInterface(InterfaceABC):
 
 		return [status] + data
 
-	def _execute_internal (self, payload):
+	def _execute_internal (self, payload: list[int]) -> list[int]:
 		self._write(self.build_payload(payload))
 		response = self.fetch_response()
 
@@ -82,12 +82,12 @@ class KLineInterface(InterfaceABC):
 
 		return response
 
-	def _write (self, message):
+	def _write (self, message: bytearray) -> None:
 		logger.debug('K-Line sending: {}'.format(' '.join([hex(x) for x in message])))
 		self.socket.write(message)
 		self.log(message)
 
-	def _read (self, length):
+	def _read (self, length: int) -> bytearray:
 		logger.debug('K-Line trying to read {} bytes'.format(length))
 		message = self.socket.read(length)
 		logger.debug('Success! Received: {}'.format(' '.join([hex(x) for x in message])))
