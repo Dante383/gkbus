@@ -11,6 +11,9 @@ class InterfaceABC(metaclass=ABCMeta):
 		
 		response = self._execute_internal(payload) # returns list (status, data)
 
+		if (len(response) == 0): # timeout. todo!
+			return KWPResponse()
+
 		return KWPResponse().set_status(response[0]).set_data(response[1:])
 
 	def shutdown (self) -> None:
