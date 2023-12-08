@@ -17,7 +17,7 @@ class InterfaceABC(metaclass=ABCMeta):
 		if ( status == (kwp_command.command + 0x40) ): # positive response
 			return KWPResponse().set_data(response[1:])
 		elif (status == 0x7F): # negative response
-			negative_responses = [str(KWPNegativeStatus(code)) for code in response[1:]]
+			negative_responses = [str(KWPNegativeStatus(code)) for code in response[2:]] # second byte will be service identifier
 			exception_str = ', '.join(negative_responses)
 			raise KWPNegativeResponseException('Negative response', exception_str)
 		else: # this probably shouldnt happen? 
