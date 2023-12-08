@@ -19,7 +19,7 @@ class InterfaceABC(metaclass=ABCMeta):
 		elif (status == 0x7F): # negative response
 			negative_responses = [str(KWPNegativeStatus(code)) for code in response[1:]]
 			exception_str = ', '.join(negative_responses)
-			raise KWPNegativeResponseException('Negative response: %s', exception_str)
+			raise KWPNegativeResponseException('Negative response', exception_str)
 		else: # this probably shouldnt happen? 
 			raise Exception('Neither negative, nor positive response. This probably shouldn\'t happen.')
 

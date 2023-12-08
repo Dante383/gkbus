@@ -2,9 +2,12 @@ KWP2000_negative_status_def = {
 	0x10: 'General Reject',
 	0x11: 'Service Not Supported',
 	0x12: 'Sub Function Not Supported / Invalid Format',
+	0x13: 'Incorrect message length or invalid format',
+	0x14: 'Response too long',
 	0x21: 'Busy / Repeat Request',
 	0x22: 'Conditions Not Correct Or Request Sequence Error',
 	0x23: 'Routine Not Complete',
+	0x24: 'Request sequence error',
 	0x31: 'Request out of range',
 	0x33: 'Security Access Denied / Security Access Requested',
 	0x35: 'Invalid Key',
@@ -12,12 +15,33 @@ KWP2000_negative_status_def = {
 	0x37: 'Required time delay not expired',
 	0x40: 'Download not accepted',
 	0x50: 'Upload not accepted',
+	0x70: 'Upload/download not accepted',
 	0x71: 'Transfer suspended',
+	0x72: 'General programming failure',
+	0x73: 'Wrong block sequence counter',
 	0x78: 'Request correctly received / Response pending',
+	0x7E: 'Subfunction not supported in active session',
+	0x7F: 'Service not supported in current session',
 	0x80: 'Service not supported in active diagnostic session',
-
-	# 0x81 - 0x8F reserved for future use by iso 14230
-	# 0x90 - 0x99 - to be defined by DCX diagnostics 
+	0x81: 'RPM too high',
+	0x82: 'RPM too low',
+	0x83: 'Engine is running',
+	0x84: 'Engine is not running',
+	0x85: 'Engine run time too low',
+	0x86: 'Temperature too high',
+	0x87: 'Temperature too low',
+	0x88: 'Vehicle speed too high',
+	0x89: 'Vehicle speed too low',
+	0x8A: 'Throttle/pedal too high',
+	0x8B: 'Throttle/pedal too low',
+	0x8C: 'Transmission range not in neutral',
+	0x8D: 'Transmission range not in gear',
+	0x8F: 'Brake switch(es) not closed (pedal not applied)',
+	
+	0x90: 'Shifter lever not in park',
+	0x91: 'Torque converter clutch locked',
+	0x92: 'Voltage too high',
+	0x93: 'Voltage too low',
 
 	0x9A: 'Data decompression failed',
 	0x9B: 'Data decryption failed',
@@ -49,4 +73,4 @@ class KWPNegativeStatus:
 		return self.name
 
 	def __str__ (self) -> str:
-		return '<{} - {}>'.format(self.code, self.name)
+		return '<{} - {}>'.format(hex(self.code), self.name)
