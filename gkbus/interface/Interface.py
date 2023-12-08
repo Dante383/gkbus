@@ -1,6 +1,5 @@
 from abc import ABCMeta
-from ..kwp.KWPCommand import KWPCommand
-from ..kwp.KWPResponse import KWPResponse
+from ..kwp import KWPCommand, KWPResponse, KWPStatus
 
 class InterfaceABC(metaclass=ABCMeta):
 	def init (self) -> None:
@@ -14,7 +13,7 @@ class InterfaceABC(metaclass=ABCMeta):
 		if (len(response) == 0): # timeout. todo!
 			return KWPResponse()
 
-		return KWPResponse().set_status(response[0]).set_data(response[1:])
+		return KWPResponse().set_status(KWPStatus(response[0])).set_data(response[1:])
 
 	def shutdown (self) -> None:
 		"""Clean up, stop communication, close interfaces"""

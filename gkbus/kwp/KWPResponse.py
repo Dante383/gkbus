@@ -1,13 +1,15 @@
+from .KWPStatus import KWPStatus
+
 class KWPResponse:
 	frame = False
-	status = False
+	status: KWPStatus = False
 	data = False
 
 	def set_frame (self, frame):
 		self.frame = frame 
 		return self 
 
-	def set_status (self, status):
+	def set_status (self, status: KWPStatus):
 		self.status = status
 		return self 
 
@@ -18,7 +20,7 @@ class KWPResponse:
 	def get_frame (self):
 		return self.frame
 
-	def get_status (self):
+	def get_status (self) -> KWPStatus:
 		return self.status
 
 	def get_data (self):
