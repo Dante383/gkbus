@@ -1,7 +1,6 @@
 import os, time, logging
-from .kline.KLineSerial import KLineSerial
-from ..kwp.KWPResponse import KWPResponse
 from .Interface import InterfaceABC
+from .kline.KLineSerial import KLineSerial
 
 logger = logging.getLogger(__name__)
 
@@ -71,22 +70,15 @@ class KLineInterface(InterfaceABC):
 
 		#if (self.calculate_checksum()) todo
 
-		return KWPResponse().set_status(status).set_data(data)
+		return [status] + data
 
-
-	def _execute_internal (self, kwp_command):
-		# first byte 8 + length 
-		# byte 2,3 = tx id
-		# 4th byte command 
-		# 4+x bytes data 
-		# last byte checksum
-
-		self._write(self.build_payload([kwp_command.command] + kwp_command.data))
+	def _execute_internal (self, payload):
+		self._write(self.build_payload(payload))
 		response = self.fetch_response()
 
 		if (response == False):
 			logger.warning('Timeout! returning []')
-			return KWPResponse().set_data([])
+			return [] # todo
 
 		return response
 

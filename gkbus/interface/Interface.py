@@ -6,8 +6,12 @@ class InterfaceABC(metaclass=ABCMeta):
 	def init (self) -> None:
 		"""Make the bus ready for sending and receiving commands"""
 
-	def execute (self, command: KWPCommand) -> KWPResponse:
-		return self._execute_internal(command)
+	def execute (self, kwp_command: KWPCommand) -> KWPResponse:
+		payload = [kwp_command.command] + kwp_command.data
+		
+		response = self._execute_internal(payload) # returns list (status, data)
+
+		return KWPResponse().set_status(response[0]).set_data(response[1:])
 
 	def shutdown (self) -> None:
 		"""Clean up, stop communication, close interfaces"""
