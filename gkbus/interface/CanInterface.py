@@ -3,7 +3,6 @@ conf.contribs['CANSocket'] = {'use-python-can': False}
 conf.contribs['ISOTP'] = {'use-can-isotp-kernel-module': True}
 from scapy.contrib.cansocket import *
 from scapy.contrib.isotp import *
-from ..kwp.KWPResponse import KWPResponse
 from .Interface import InterfaceABC
 
 class CanInterface(InterfaceABC):
