@@ -15,6 +15,13 @@ class CanInterface(InterfaceABC):
 		response = self.socket.sr1(ISOTP(bytes(payload)), verbose=False)
 
 		return list(response.data)
+
+	def set_timeout (self, timeout: int | None = None):
+		if (timeout == None):
+			self.socket.timeout = 5
+		else:
+			self.socket.timeout = timeout
+		return self
 		
 	def shutdown (self) -> None:
 		self.socket.close()

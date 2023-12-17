@@ -1,4 +1,4 @@
-import os, time, logging
+import time, logging
 from .Interface import InterfaceABC
 from .kline.KLineSerial import KLineSerial
 
@@ -12,10 +12,6 @@ class KLineInterface(InterfaceABC):
 		self.rx_id = rx_id
 		self.tx_id = tx_id
 		self.socket = KLineSerial(interface, baudrate=baudrate)
-		try:
-			os.remove('kline.log')
-		except OSError:
-			pass
 
 	def init (self) -> None:
 		self.socket.init()
@@ -85,18 +81,19 @@ class KLineInterface(InterfaceABC):
 	def _write (self, message: bytearray) -> None:
 		logger.debug('K-Line sending: {}'.format(' '.join([hex(x) for x in message])))
 		self.socket.write(message)
-		self.log(message)
 
 	def _read (self, length: int) -> bytearray:
 		logger.debug('K-Line trying to read {} bytes'.format(length))
 		message = self.socket.read(length)
 		logger.debug('Success! Received: {}'.format(' '.join([hex(x) for x in message])))
-		self.log(message)
 		return message
 
-	def log (self, message):
-		with open('kline.log', 'ab') as file:
-			file.write(message)
+	def set_timeout (self, timeout: int | None = None):
+		if (timeout == None):
+			self.socket.socket.timeout = 5
+		else:
+			self.socket.socket.timeout = timeout
+		return self
 
 	def shutdown (self) -> None:
 		self.socket.shutdown()

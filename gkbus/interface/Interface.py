@@ -23,6 +23,9 @@ class InterfaceABC(metaclass=ABCMeta):
 		else: # this probably shouldnt happen? 
 			raise Exception('Neither negative, nor positive response. This probably shouldn\'t happen.')
 
+	def set_timeout (self, timeout: int | None = None):
+		"""Set timeout for the underlaying socket. Pass None to use the default value."""
+
 	def shutdown (self) -> None:
 		"""Clean up, stop communication, close interfaces"""
 
