@@ -105,7 +105,7 @@ class StartCommunication(KWPCommand):
 class StartDiagnosticSession(KWPCommand):
 	command = 0x10
 
-class StartRoutineByLocalId(KWPCommand):
+class StartRoutineByLocalIdentifier(KWPCommand):
 	command = 0x31
 
 class StopCommunication(KWPCommand):
@@ -117,7 +117,7 @@ class StartDiagnosticSession(KWPCommand):
 	def __init__ (self):
 		self.data = [0x85]
 
-class StopRoutineByLocalId(KWPCommand):
+class StopRoutineByLocalIdentifier(KWPCommand):
 	command = 0x32
 
 class TesterPresent(KWPCommand):
