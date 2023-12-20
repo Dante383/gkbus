@@ -1,8 +1,32 @@
-from .KWPCommand import KWPCommand
+from .KWPCommand import KWPCommand, KWPCommandWithSubservices
 from .enums import *
 
-class AccessTimingParameters(KWPCommand):
+class AccessTimingParameters(KWPCommandWithSubservices): # TimingParameterIdentifier
 	command = 0x83
+	subservices = {
+		TimingParameterIdentifier.READ_LIMITS_OF_POSSIBLE_TIMING_PARAMETERS: 'read_limits_of_possible_timing_parameters',
+		TimingParameterIdentifier.SET_TIMING_PARAMETERS_TO_DEFAULT_VALUES: 'set_timing_parameters_to_default_values',
+		TimingParameterIdentifier.READ_CURRENTLY_ACTIVE_TIMING_PARAMETERS: 'read_currently_active_timing_parameters',
+		TimingParameterIdentifier.SET_TIMING_PARAMETERS_TO_GIVEN_VALUES: 'set_timing_parameters_to_given_values'
+	}
+
+	def read_limits_of_possible_timing_parameters (self):
+		pass
+
+	def set_timing_parameters_to_default_values (self):
+		pass
+
+	def read_currently_active_timing_parameters (self):
+		pass
+
+	def set_timing_parameters_to_given_values (self,
+			p2min: int,
+			p2max: int,
+			p3min: int,
+			p3max: int,
+			p4min: int
+		):
+		self.set_data([p2min, p2max, p3min, p3max, p4min])
 
 class ClearDiagnosticInformation(KWPCommand):
 	command = 0x14
@@ -36,54 +60,41 @@ class ReadDTCsByStatus(KWPCommand):
 
 class ReadEcuIdentification(KWPCommand):
 	command = 0x1A
-	identifier = 0x0
 
 	def __init__ (self, identifier):
-		self.identifier = identifier
-		self.data = [self.identifier]
+		self.set_data(identifier)
 
 class ReadMemoryByAddress(KWPCommand):
 	command = 0x23
-	offset = 0x000000
-	size = 0xFE
 
 	def __init__ (self, offset=0x000000, size=0xFE):
-		self.offset = offset
-		self.size = size
-		byte1 = (self.offset >> 16) & 0xFF
-		byte2 = (self.offset >> 8) & 0xFF
-		byte3 = self.offset & 0xFF
+		byte1 = (offset >> 16) & 0xFF
+		byte2 = (offset >> 8) & 0xFF
+		byte3 = offset & 0xFF
 
-		self.data = [byte1, byte2, byte3, self.size]
+		self.set_data([byte1, byte2, byte3, size])
 
 class ReadStatusOfDTC(KWPCommand):
 	command = 0x01
-	dtc = 0x0
 
 	def __init__ (self, dtc):
-		self.dtc = dtc
-		self.data = [self.dtc]
+		self.set_data([dtc])
 
 class RequestDownload(KWPCommand):
 	command = 0x34
-	offset = 0x0
-	size = 0
 
 	def __init__ (self, offset, size):
-		self.offset = offset 
-		self.size = size 
-
-		offset_b1 = (self.offset >> 16) & 0xFF
-		offset_b2 = (self.offset >> 8) & 0xFF
-		offset_b3 = self.offset & 0xFF
+		offset_b1 = (offset >> 16) & 0xFF
+		offset_b2 = (offset >> 8) & 0xFF
+		offset_b3 = offset & 0xFF
 
 		data_format = 0x00 # uncompressed, unencrypted
 
-		size_b1 = (self.size >> 16) & 0xFF
-		size_b2 = (self.size >> 8) & 0xFF
-		size_b3 = self.size & 0xFF
+		size_b1 = (size >> 16) & 0xFF
+		size_b2 = (size >> 8) & 0xFF
+		size_b3 = size & 0xFF
 
-		self.data = [offset_b1, offset_b2, offset_b3, data_format, size_b1, size_b2, size_b3]
+		self.set_data([offset_b1, offset_b2, offset_b3, data_format, size_b1, size_b2, size_b3])
 
 class RequestRoutineResultsByLocalIdentifier(KWPCommand):
 	command = 0x33
@@ -116,7 +127,7 @@ class StartDiagnosticSession(KWPCommand):
 	command = 0x10
 
 	def __init__ (self, session_type: DiagnosticSession):
-		self.data = [session_type.value]
+		self.set_data([session_type.value])
 
 class StopRoutineByLocalIdentifier(KWPCommand):
 	command = 0x32
@@ -135,20 +146,15 @@ class WriteDataByLocalIdentifier(KWPCommand):
 
 class WriteMemoryByAddress(KWPCommand):
 	command = 0x3D
-	offset = 0x0
-	size = 0
-	data_to_write = []
 
 	def __init__ (self, offset, data_to_write):
-		self.offset = offset
-		self.data_to_write = data_to_write
-		self.size = len(self.data_to_write)
+		size = len(data_to_write)
 
-		byte1 = (self.offset >> 16) & 0xFF
-		byte2 = (self.offset >> 8) & 0xFF
-		byte3 = self.offset & 0xFF
+		byte1 = (offset >> 16) & 0xFF
+		byte2 = (offset >> 8) & 0xFF
+		byte3 = offset & 0xFF
 
-		self.data = [byte1, byte2, byte3, self.size] + self.data_to_write
+		self.set_data([byte1, byte2, byte3, size] + data_to_write)
 
 class StopCommunication(KWPCommand):
 	command = 0x82
