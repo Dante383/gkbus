@@ -1,4 +1,5 @@
 from .KWPCommand import KWPCommand
+from .enums import *
 
 class AccessTimingParameters(KWPCommand):
 	command = 0x83
@@ -114,8 +115,8 @@ class StopCommunication(KWPCommand):
 class StartDiagnosticSession(KWPCommand):
 	command = 0x10
 
-	def __init__ (self):
-		self.data = [0x85]
+	def __init__ (self, session_type: DiagnosticSession):
+		self.data = [session_type.value]
 
 class StopRoutineByLocalIdentifier(KWPCommand):
 	command = 0x32

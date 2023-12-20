@@ -1,0 +1,9 @@
+from enum import Enum 
+
+class DiagnosticSession(Enum):
+	DEFAULT = 0x81
+	FLASH_REPROGRAMMING = 0x85
+	ENGINEERING = 0x86
+	STANDBY = 0x89
+	PASSIVE = 0x90
+	EXTENDED_DIAGNOSTIC = 0x92
