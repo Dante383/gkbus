@@ -62,7 +62,7 @@ class ReadEcuIdentification(KWPCommand):
 	command = 0x1A
 
 	def __init__ (self, identifier):
-		self.set_data(identifier)
+		self.set_data([identifier])
 
 class ReadMemoryByAddress(KWPCommand):
 	command = 0x23
