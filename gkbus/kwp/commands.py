@@ -43,6 +43,9 @@ class DynamicallyDefineLocalIdentifier(KWPCommand):
 class ECUReset(KWPCommand):
 	command = 0x11
 
+	def __init__ (self, reset_mode: ResetMode):
+		self.set_data([reset_mode.value])
+
 class EnableNormalMessageTransmission(KWPCommand):
 	command = 0x29
 
@@ -67,7 +70,7 @@ class ReadEcuIdentification(KWPCommand):
 class ReadMemoryByAddress(KWPCommand):
 	command = 0x23
 
-	def __init__ (self, offset=0x000000, size=0xFE):
+	def __init__ (self, offset: int = 0x000000, size: int = 0xFE):
 		byte1 = (offset >> 16) & 0xFF
 		byte2 = (offset >> 8) & 0xFF
 		byte3 = offset & 0xFF
@@ -83,7 +86,7 @@ class ReadStatusOfDTC(KWPCommand):
 class RequestDownload(KWPCommand):
 	command = 0x34
 
-	def __init__ (self, offset, size):
+	def __init__ (self, offset: int, size: int):
 		offset_b1 = (offset >> 16) & 0xFF
 		offset_b2 = (offset >> 8) & 0xFF
 		offset_b3 = offset & 0xFF
@@ -108,8 +111,21 @@ class RequestUpload(KWPCommand):
 class ResponseOnEvent(KWPCommand):
 	command = 0x86
 
-class SecurityAccess(KWPCommand):
+class SecurityAccess(KWPCommandWithSubservices):
 	command = 0x27
+
+	subservices = {
+		AccessType.PROGRAMMING_REQUEST_SEED: 'request_seed',
+		AccessType.PROGRAMMING_SEND_KEY: 'send_key'
+	}
+
+	def request_seed (self):
+		pass
+
+	def send_key (self, key: int):
+		key_byte1 = (key >> 8) & 0xFF
+		key_byte2 = key & 0xFF
+		self.set_data([key_byte1, key_byte2])
 
 class StartCommunication(KWPCommand):
 	command = 0x81
@@ -119,6 +135,9 @@ class StartDiagnosticSession(KWPCommand):
 
 class StartRoutineByLocalIdentifier(KWPCommand):
 	command = 0x31
+
+	def __init__ (self, routine_identifier: int):
+		self.set_data([routine_identifier])
 
 class StopCommunication(KWPCommand):
 	command = 0x82
@@ -144,10 +163,13 @@ class WriteDataByIdentifier(KWPCommand):
 class WriteDataByLocalIdentifier(KWPCommand):
 	command = 0x3B
 
+	def __init__ (self, record_local_identifier: int, record_value: list[int]):
+		self.set_data([record_local_identifier] + record_value)
+
 class WriteMemoryByAddress(KWPCommand):
 	command = 0x3D
 
-	def __init__ (self, offset, data_to_write):
+	def __init__ (self, offset: int, data_to_write: list[int]):
 		size = len(data_to_write)
 
 		byte1 = (offset >> 16) & 0xFF
