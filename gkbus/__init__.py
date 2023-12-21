@@ -17,3 +17,6 @@ def Bus (protocol: str, interface: str, **kwargs):
 	bus = bus_class(interface=interface, **kwargs)
 
 	return bus
+
+class GKBusTimeoutException (Exception):
+	pass

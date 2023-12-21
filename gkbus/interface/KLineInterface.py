@@ -1,6 +1,7 @@
 import time, logging
 from .Interface import InterfaceABC
 from .kline.KLineSerial import KLineSerial
+from gkbus import GKBusTimeoutException
 
 logger = logging.getLogger(__name__)
 
@@ -42,7 +43,7 @@ class KLineInterface(InterfaceABC):
 		counter = self._read(1)
 
 		if (len(counter) == 0):
-			return False
+			raise GKBusTimeoutException()
 
 		rx_id_b1 = int.from_bytes(self._read(1), "big")
 		rx_id_b2 = int.from_bytes(self._read(1), "big")
@@ -71,10 +72,6 @@ class KLineInterface(InterfaceABC):
 	def _execute_internal (self, payload: list[int]) -> list[int]:
 		self._write(self.build_payload(payload))
 		response = self.fetch_response()
-
-		if (response == False):
-			logger.warning('Timeout! returning []')
-			return [] # todo
 
 		return response
 

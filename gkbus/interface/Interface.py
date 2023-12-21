@@ -10,9 +10,6 @@ class InterfaceABC(metaclass=ABCMeta):
 		
 		response = self._execute_internal(payload) # returns list (status, data)
 
-		if (len(response) == 0): # timeout. todo!
-			return KWPResponse()
-
 		status = response[0]
 		if ( status == (kwp_command.command + 0x40) ): # positive response
 			return KWPResponse().set_data(response[1:])
