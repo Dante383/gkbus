@@ -6,12 +6,9 @@ from gkbus import GKBusTimeoutException
 logger = logging.getLogger(__name__)
 
 class KLineInterface(InterfaceABC):
-	socket = False
-
+	
 	def __init__ (self, interface, baudrate, rx_id, tx_id):
-		print('    [K] K-line init. Iface: {} baudrate: {}'.format(interface, baudrate))
-		self.rx_id = rx_id
-		self.tx_id = tx_id
+		self.rx_id, self.tx_id = rx_id, tx_id
 		self.socket = KLineSerial(interface, baudrate=baudrate)
 
 	def init (self) -> None:
@@ -45,9 +42,7 @@ class KLineInterface(InterfaceABC):
 		if (len(counter) == 0):
 			raise GKBusTimeoutException()
 
-		rx_id_b1 = int.from_bytes(self._read(1), "big")
-		rx_id_b2 = int.from_bytes(self._read(1), "big")
-		rx_id = (rx_id_b1 << 8) | rx_id_b2
+		rx_id = int.from_bytes(self._read(2), "big")
 
 		if (counter == b'\x80'): # more than 127 bytes incoming, counter overflowed. counter is gonna come after IDs
 			counter = int.from_bytes(self._read(1), "big")
@@ -61,11 +56,14 @@ class KLineInterface(InterfaceABC):
 		checksum = self._read(1)
 
 		if (status == b'\x7F'):
-			if (0x78 in data): # ecu is busy. request received, response pending
+			if (0x78 in data): 
 				logger.warning('ECU is busy, request received, response pending.')
 				return self.fetch_response()
 
 		#if (self.calculate_checksum()) todo
+
+		if (rx_id != self.rx_id): # we are only doing this now because we needed to clear this message out of the buffer
+			return self.fetch_response()
 
 		return [int.from_bytes(status, "big")] + data
 
