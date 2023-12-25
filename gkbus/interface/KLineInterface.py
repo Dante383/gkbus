@@ -59,7 +59,7 @@ class KLineInterface(InterfaceABC):
 		rx_id, = struct.unpack('>H', self._read(2))
 
 		if (counter == b'\x80'): # more than 127 bytes incoming, counter overflowed. counter is gonna come after IDs
-			counter, = struct.unpack('>B', counter)
+			counter, = struct.unpack('>B', self._read(1))
 		else:
 			counter = struct.unpack('>B', counter)[0]-0x80
 

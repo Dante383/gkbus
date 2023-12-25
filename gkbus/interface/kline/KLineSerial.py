@@ -6,10 +6,6 @@ import serial
 logger = logging.getLogger(__name__)
 
 class KLineSerial:
-	socket = False
-	iface = False
-	baudrate = False
-
 	HIGH = bytes([0x01])
 	LOW = bytes([0x0])
 
@@ -29,7 +25,7 @@ class KLineSerial:
 
 		self.iface = iface 
 		self.baudrate = baudrate
-		self.socket = pyftdi.serialext.serial_for_url(self.iface, baudrate=self.baudrate, timeout=5)
+		self.socket = pyftdi.serialext.serial_for_url(self.iface, baudrate=self.baudrate, timeout=0.2)
 
 	def fast_init (self, payload: list[int]):
 		self.socket = Ftdi()
