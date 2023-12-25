@@ -1,3 +1,4 @@
+import struct
 from .KWPCommand import KWPCommand, KWPCommandWithSubservices
 from .enums import *
 
@@ -37,6 +38,9 @@ class ControlDTCSetting(KWPCommand):
 class DisableNormalMessageTransmission(KWPCommand):
 	command = 0x28
 
+	def __init__(self, response_type: ResponseType):
+		self.set_data([response_type.value])
+
 class DynamicallyDefineLocalIdentifier(KWPCommand):
 	command = 0x2C
 
@@ -49,14 +53,23 @@ class ECUReset(KWPCommand):
 class EnableNormalMessageTransmission(KWPCommand):
 	command = 0x29
 
+	def __init__ (self, response_type: ResponseType):
+		self.set_data([response_type.value])
+
 class InputOutputControlByLocalIdentifier(KWPCommand):
 	command = 0x30
+
+	def __init__ (self, control_identifier: int, control_parameter: InputOutputControlParameter, *control_state):
+		self.set_data([control_identifier, control_parameter.value, *control_state])
 
 class ReadDataByIdentifier(KWPCommand):
 	command = 0x22
 
 class ReadDataByLocalIdentifier(KWPCommand):
 	command = 0x21
+
+	def __init__ (self, record_local_identifier: int):
+		self.set_data([record_local_identifier])
 
 class ReadDTCsByStatus(KWPCommand):
 	command = 0x18
@@ -71,11 +84,9 @@ class ReadMemoryByAddress(KWPCommand):
 	command = 0x23
 
 	def __init__ (self, offset: int = 0x000000, size: int = 0xFE):
-		byte1 = (offset >> 16) & 0xFF
-		byte2 = (offset >> 8) & 0xFF
-		byte3 = offset & 0xFF
+		address = struct.pack('>L', offset)[1:]
 
-		self.set_data([byte1, byte2, byte3, size])
+		self.set_data([*address, size])
 
 class ReadStatusOfDTC(KWPCommand):
 	command = 0x01
@@ -86,27 +97,41 @@ class ReadStatusOfDTC(KWPCommand):
 class RequestDownload(KWPCommand):
 	command = 0x34
 
-	def __init__ (self, offset: int, size: int):
-		offset_b1 = (offset >> 16) & 0xFF
-		offset_b2 = (offset >> 8) & 0xFF
-		offset_b3 = offset & 0xFF
+	def __init__ (self, 
+			offset: int, 
+			compression_type: CompressionType,
+			encryption_type: EncryptionType,
+			size: int
+		):
+		address = struct.pack('>L', offset)[1:]
+		data_format = (compression_type.value << 4) | encryption_type.value
+		size = struct.pack('>L', size)[1:]
 
-		data_format = 0x00 # uncompressed, unencrypted
-
-		size_b1 = (size >> 16) & 0xFF
-		size_b2 = (size >> 8) & 0xFF
-		size_b3 = size & 0xFF
-
-		self.set_data([offset_b1, offset_b2, offset_b3, data_format, size_b1, size_b2, size_b3])
+		self.set_data([*address, data_format, *size])
 
 class RequestRoutineResultsByLocalIdentifier(KWPCommand):
 	command = 0x33
+
+	def __init__ (self, routine_identifier: int):
+		self.set_data([routine_identifier])
 
 class RequestTransferExit(KWPCommand):
 	command = 0x37
 
 class RequestUpload(KWPCommand):
 	command = 0x35
+
+	def __init__ (self, 
+			offset: int, 
+			compression_type: CompressionType,
+			encryption_type: EncryptionType,
+			size: int
+		):
+		address = struct.pack('>L', offset)[1:]
+		data_format = (compression_type.value << 4) | encryption_type.value
+		size = struct.pack('>L', size)[1:]
+
+		self.set_data([*address, data_format, *size])
 
 class ResponseOnEvent(KWPCommand):
 	command = 0x86
@@ -123,24 +148,17 @@ class SecurityAccess(KWPCommandWithSubservices):
 		pass
 
 	def send_key (self, key: int):
-		key_byte1 = (key >> 8) & 0xFF
-		key_byte2 = key & 0xFF
-		self.set_data([key_byte1, key_byte2])
+		key = key.to_bytes((key.bit_length()//8), 'big')
+		self.set_data([*key])
 
 class StartCommunication(KWPCommand):
 	command = 0x81
 
-class StartDiagnosticSession(KWPCommand):
-	command = 0x10
-
 class StartRoutineByLocalIdentifier(KWPCommand):
 	command = 0x31
 
-	def __init__ (self, routine_identifier: int):
-		self.set_data([routine_identifier])
-
-class StopCommunication(KWPCommand):
-	command = 0x82
+	def __init__ (self, routine_identifier: int, *routine_entry_option):
+		self.set_data([routine_identifier, *routine_entry_option])
 
 class StartDiagnosticSession(KWPCommand):
 	command = 0x10
@@ -153,11 +171,20 @@ class StartDiagnosticSession(KWPCommand):
 		if (dev_baudrate_identifier): 
 			self.set_data(self.get_data() + [dev_baudrate_identifier])
 
+class StopCommunication(KWPCommand):
+	command = 0x82
+
 class StopRoutineByLocalIdentifier(KWPCommand):
 	command = 0x32
 
+	def __init__ (self, routine_identifier: int, *routine_exit_option):
+		self.set_data([routine_identifier, *routine_exit_option])
+
 class TesterPresent(KWPCommand):
 	command = 0x3E
+
+	def __init__ (self, response_type: ResponseType):
+		self.set_data([response_type.value])
 
 class TransferData(KWPCommand):
 	command = 0x36
@@ -177,11 +204,9 @@ class WriteMemoryByAddress(KWPCommand):
 	def __init__ (self, offset: int, data_to_write: list[int]):
 		size = len(data_to_write)
 
-		byte1 = (offset >> 16) & 0xFF
-		byte2 = (offset >> 8) & 0xFF
-		byte3 = offset & 0xFF
+		address = struct.pack('>L', offset)[1:]
 
-		self.set_data([byte1, byte2, byte3, size] + data_to_write)
+		self.set_data([*address, size] + data_to_write)
 
 class StopCommunication(KWPCommand):
 	command = 0x82

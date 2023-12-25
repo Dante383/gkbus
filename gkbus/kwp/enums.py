@@ -22,3 +22,21 @@ class AccessType(Enum):
 class ResetMode(Enum):
 	POWER_ON_RESET = 0x01
 	NONVOLATILE_MEMORY_RESET = 0x82
+
+class InputOutputControlParameter(Enum):
+	RETURN_CONTROL_TO_ECU = 0x00
+	REPORT_CURRENT_STATE = 0x01
+	RESET_TO_DEFAULT = 0x04
+	FREEZE_CURRENT_STATE = 0x05
+	SHORT_TERM_ADJUSTMENT = 0x07
+	LONG_TERM_ADJUSTMENT = 0x08
+
+class CompressionType(Enum):
+	UNCOMPRESSED = 0x0
+
+class EncryptionType(Enum):
+	UNENCRYPTED = 0x0
+
+class ResponseType(Enum):
+	REQUIRED = 0x01
+	NOT_REQUIRED = 0x02

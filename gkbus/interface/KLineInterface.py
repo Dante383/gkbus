@@ -1,4 +1,4 @@
-import time, logging
+import time, logging, struct
 from .Interface import InterfaceABC
 from .kline.KLineSerial import KLineSerial
 from gkbus import GKBusTimeoutException
@@ -29,10 +29,9 @@ class KLineInterface(InterfaceABC):
 			counter = 0x80
 			data = [data_length] + data
 
-		tx_id_b1 = (self.tx_id >> 8) & 0xFF
-		tx_id_b2 = (self.tx_id & 0xFF)
+		tx_id = struct.pack('>h', self.tx_id)
 
-		payload = [counter, tx_id_b1, tx_id_b2] + data
+		payload = [counter, *tx_id] + data
 		payload += [self.calculate_checksum(payload)]
 		return bytes(payload)
 
@@ -42,12 +41,12 @@ class KLineInterface(InterfaceABC):
 		if (len(counter) == 0):
 			raise GKBusTimeoutException()
 
-		rx_id = int.from_bytes(self._read(2), "big")
+		rx_id, = struct.unpack('>H', self._read(2))
 
 		if (counter == b'\x80'): # more than 127 bytes incoming, counter overflowed. counter is gonna come after IDs
-			counter = int.from_bytes(self._read(1), "big")
+			counter, = struct.unpack('>B', counter)
 		else:
-			counter = int.from_bytes(counter, "big")-0x80
+			counter = struct.unpack('>B', counter)[0]-0x80
 
 		status = self._read(1)
 
@@ -65,7 +64,7 @@ class KLineInterface(InterfaceABC):
 		if (rx_id != self.rx_id): # we are only doing this now because we needed to clear this message out of the buffer
 			return self.fetch_response()
 
-		return [int.from_bytes(status, "big")] + data
+		return [struct.unpack('>B', status)[0]] + data
 
 	def _execute_internal (self, payload: list[int]) -> list[int]:
 		self._write(self.build_payload(payload))
