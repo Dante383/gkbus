@@ -11,8 +11,23 @@ class KLineInterface(InterfaceABC):
 		self.rx_id, self.tx_id = rx_id, tx_id
 		self.socket = KLineSerial(interface, baudrate=baudrate)
 
-	def init (self) -> None:
-		self.socket.init()
+	def _init (self, payload) -> None:
+		payload = self.build_payload(payload)
+
+		tries = 0
+		max_tries = 5
+		
+		while True:
+			logger.info('fast init..')
+			self.socket.fast_init(payload)
+			try:
+				self.fetch_response()
+				break
+			except GKBusTimeoutException:
+				tries += 1
+			if (tries >= max_tries):
+				logger.warning('fast init failed!')
+				break
 
 	def calculate_checksum (self, payload: list[int]) -> int:
 		checksum = 0x0
@@ -90,4 +105,7 @@ class KLineInterface(InterfaceABC):
 		return self
 
 	def shutdown (self) -> None:
-		self.socket.shutdown()
+		try:
+			self.socket.shutdown()
+		except AttributeError:
+			pass

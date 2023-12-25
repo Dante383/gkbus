@@ -20,39 +20,24 @@ class KLineSerial:
 	TIMEOUT_AFTER_REQUEST = (30 + 20)/1000
 
 	def __init__ (self, iface, baudrate):
-	#	self.init(iface, baudrate)
-		self.iface = iface 
-		self.baudrate = baudrate
-		self.socket = pyftdi.serialext.serial_for_url(self.iface, baudrate=self.baudrate, timeout=0.2)
-		
-	def init (self):
 		try:
-			Ftdi().get_device(self.iface)
+			Ftdi().get_device(iface)
 		except pyftdi.usbtools.UsbToolsError:
-			print('[!] Device {} not found!'.format(self.iface))
+			print('[!] Device {} not found!'.format(iface))
 			Ftdi().show_devices()
 			sys.exit(1)
 
-		logger.info('fast init..')
-		self.fast_init(self.iface, self.baudrate)
-		logger.info('fast init done. closing serial opening serialext instance')
+		self.iface = iface 
+		self.baudrate = baudrate
+		self.socket = pyftdi.serialext.serial_for_url(self.iface, baudrate=self.baudrate, timeout=5)
 
-		self.socket = pyftdi.serialext.serial_for_url(self.iface, baudrate=self.baudrate, timeout=0.2)
-
-		logger.info('wait for startCommunication response')
-		time.sleep(0.04)
-
-		logger.info('received {} bytes.'.format(len(self.read(7))))
-		self.socket.timeout = 5
-		
-	def fast_init (self, iface, baudrate):
+	def fast_init (self, payload: list[int]):
 		self.socket = Ftdi()
-		self.socket.open_from_url(iface)
+		self.socket.open_from_url(self.iface)
 		self.socket.purge_buffers()
-		self.socket.set_baudrate(baudrate)
+		self.socket.set_baudrate(self.baudrate)
 		self.socket.set_line_property(8, 1, 'N')
 		self.socket.set_bitmode(0x01, Ftdi.BitMode(0x01))
-		#time.sleep(self.TIMEOUT_IDLE_BUS_BEFORE_INIT)
 		self.socket.write_data(self.HIGH)
 
 		start = time.monotonic()
@@ -72,9 +57,11 @@ class KLineSerial:
 			time.sleep(0.00025)
 
 		self.socket.set_bitmode(0x00, Ftdi.BitMode(0x00))
-		#time.sleep(self.TIMEOUT_POST_INIT)
 
-		self.socket.write_data(bytes([0x81, 0x11, 0xF1, 0x81, 0x04]))
+		self.socket.write_data(bytes(payload))
+
+		self.socket = pyftdi.serialext.serial_for_url(self.iface, baudrate=self.baudrate, timeout=5)
+
 
 	def write (self, payload):
 		time.sleep(self.TIMEOUT_AFTER_REQUEST*2)
@@ -93,4 +80,7 @@ class KLineSerial:
 		return message
 
 	def shutdown (self) -> None:
-		self.socket.close()
+		try:
+			self.socket.close()
+		except AttributeError:
+			pass

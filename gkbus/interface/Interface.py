@@ -2,7 +2,11 @@ from abc import ABCMeta
 from ..kwp import KWPCommand, KWPResponse, KWPNegativeStatus, KWPNegativeResponseException
 
 class InterfaceABC(metaclass=ABCMeta):
-	def init (self) -> None:
+	def init (self, payload: KWPCommand = None) -> None:
+		"""Make the bus ready for sending and receiving commands"""
+		self._init([payload.get_command()] + payload.get_data())
+
+	def _init (self, payload: list[int]) -> None:
 		"""Make the bus ready for sending and receiving commands"""
 
 	def execute (self, kwp_command: KWPCommand) -> KWPResponse:
