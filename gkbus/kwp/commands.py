@@ -145,8 +145,13 @@ class StopCommunication(KWPCommand):
 class StartDiagnosticSession(KWPCommand):
 	command = 0x10
 
-	def __init__ (self, session_type: DiagnosticSession):
+	def __init__ (self, session_type: DiagnosticSession, dev_baudrate_identifier: int = None):
 		self.set_data([session_type.value])
+		# while it's not present in any official documentations, most ECU manufacturers use 
+		# the second parameter of StartDiagnosticSession as a baudrate switch. 
+		# for example, 0x03 on SIMK43 will result in 40k baud, 0x04 - 60k 
+		if (dev_baudrate_identifier): 
+			self.set_data(self.get_data() + [dev_baudrate_identifier])
 
 class StopRoutineByLocalIdentifier(KWPCommand):
 	command = 0x32

@@ -8,6 +8,16 @@ class KWPCommand:
 		self.data = data
 		return self
 
+	def get_data (self) -> list[int]:
+		return self.data
+
+	def set_command (self, command: int):
+		self.command = command
+		return self
+
+	def get_command (self) -> int:
+		return self.command
+
 class KWPCommandWithSubservices(KWPCommand):
 	def __init__ (self, subservice: int, *kwargs):
 		self.subservice: Enum = subservice
