@@ -3,7 +3,9 @@ conf.contribs['CANSocket'] = {'use-python-can': False}
 conf.contribs['ISOTP'] = {'use-can-isotp-kernel-module': True}
 from scapy.contrib.cansocket import *
 from scapy.contrib.isotp import *
+import logging
 from .Interface import InterfaceABC
+logger = logging.getLogger(__name__)
 
 class CanInterface(InterfaceABC):
 	socket = False
@@ -14,7 +16,14 @@ class CanInterface(InterfaceABC):
 	def _execute_internal (self, payload: list[int]) -> list[int]:
 		response = self.socket.sr1(ISOTP(bytes(payload)), verbose=False)
 
-		return list(response.data)
+		data = list(response.data)
+
+		if (len(data) > 2):
+			if (data[2] == 0x78): # request received response pending
+				logger.warning('ECU is busy, request received, response pending.')
+				response = self.socket.recv()
+				return list(response.data)
+		return data 
 
 	def set_timeout (self, timeout: int | None = None):
 		if (timeout == None):
