@@ -148,7 +148,7 @@ class SecurityAccess(KWPCommandWithSubservices):
 		pass
 
 	def send_key (self, key: int):
-		key = key.to_bytes((key.bit_length()//8), 'big')
+		key = key.to_bytes((key.bit_length()//7), 'big')
 		self.set_data([*key])
 
 class StartCommunication(KWPCommand):
