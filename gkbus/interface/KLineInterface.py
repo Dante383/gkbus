@@ -15,7 +15,7 @@ class KLineInterface(InterfaceABC):
 		payload = self.build_payload(payload)
 
 		tries = 0
-		max_tries = 5
+		max_tries = 1
 		
 		while True:
 			logger.info('fast init..')
