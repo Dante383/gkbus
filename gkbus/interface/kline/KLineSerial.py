@@ -56,7 +56,7 @@ class KLineSerial:
 
 		self.socket.write_data(bytes(payload))
 
-		self.socket = pyftdi.serialext.serial_for_url(self.iface, baudrate=self.baudrate, timeout=5)
+		self.socket = pyftdi.serialext.serial_for_url(self.iface, baudrate=self.baudrate, timeout=0.2)
 
 
 	def write (self, payload):

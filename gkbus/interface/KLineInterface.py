@@ -28,6 +28,7 @@ class KLineInterface(InterfaceABC):
 			if (tries >= max_tries):
 				logger.warning('fast init failed!')
 				break
+		self.set_timeout(5)
 
 	def calculate_checksum (self, payload: list[int]) -> int:
 		checksum = 0x0
