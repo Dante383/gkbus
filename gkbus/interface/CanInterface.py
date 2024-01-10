@@ -19,7 +19,7 @@ class CanInterface(InterfaceABC):
 		data = list(response.data)
 
 		if (len(data) > 2):
-			if (data[2] == 0x78): # request received response pending
+			if (data[1] == 0x7f and data[2] == 0x78): # request received response pending
 				logger.warning('ECU is busy, request received, response pending.')
 				response = self.socket.recv()
 				return list(response.data)
