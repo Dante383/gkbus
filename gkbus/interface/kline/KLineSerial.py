@@ -25,9 +25,15 @@ class KLineSerial:
 
 		self.iface = iface 
 		self.baudrate = baudrate
-		self.socket = pyftdi.serialext.serial_for_url(self.iface, baudrate=self.baudrate, timeout=0.2)
+		self.socket = pyftdi.serialext.serial_for_url(self.iface, baudrate=self.baudrate, timeout=0.4)
 
-	def fast_init (self, payload: list[int]):
+	def fast_init_native (self, payload: list[int]):
+		self.socket.send_break(0.025)
+		time.sleep(0.025)
+		self.socket.read(1)
+		self.socket.write(bytes(payload))
+
+	def fast_init_ftdi (self, payload: list[int]):
 		self.socket = Ftdi()
 		self.socket.open_from_url(self.iface)
 		self.socket.purge_buffers()
