@@ -7,13 +7,13 @@ class InterfaceABC(metaclass=ABCMeta):
 		"""Make the bus ready for sending and receiving commands"""
 		self._init([payload.get_command()] + payload.get_data())
 
+		self._execute_lock = threading.Lock()
 		if (keepalive_payload):
 			self.keepalive_payload = keepalive_payload
 			self.keepalive_timeout = keepalive_timeout
 			self._keepalive_thread = None 
 			self._last_execution_time = None#time.time()
 			self._keepalive_event = threading.Event()
-			self._execute_lock = threading.Lock()
 			self.start_keepalive()
 
 	def _init (self, payload: list[int]) -> None:
