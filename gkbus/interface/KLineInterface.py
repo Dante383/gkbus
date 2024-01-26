@@ -112,3 +112,4 @@ class KLineInterface(InterfaceABC):
 			self.socket.shutdown()
 		except AttributeError:
 			pass
+		super().shutdown()

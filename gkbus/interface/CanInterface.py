@@ -34,3 +34,4 @@ class CanInterface(InterfaceABC):
 		
 	def shutdown (self) -> None:
 		self.socket.close()
+		super().shutdown()

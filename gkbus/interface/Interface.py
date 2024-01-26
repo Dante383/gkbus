@@ -3,12 +3,10 @@ from ..kwp import KWPCommand, KWPResponse, KWPNegativeStatus, KWPNegativeRespons
 import threading, time
 
 class InterfaceABC(metaclass=ABCMeta):
-	def __init__ (self):
-		self._execute_lock = threading.Lock()
-
 	def init (self, payload: KWPCommand = None, keepalive_payload: KWPCommand = None, keepalive_timeout: int = None) -> None:
 		"""Make the bus ready for sending and receiving commands"""
 		self._init([payload.get_command()] + payload.get_data())
+		self._execute_lock = threading.Lock()
 
 		if (keepalive_payload):
 			self.keepalive_payload = keepalive_payload
@@ -23,6 +21,9 @@ class InterfaceABC(metaclass=ABCMeta):
 
 	def execute (self, kwp_command: KWPCommand) -> KWPResponse:
 		"""Send KWPCommand and prepare response"""
+		if (not hasattr(self, '_execute_lock')):
+			self._execute_lock = threading.Lock() # not ideal 
+
 		with self._execute_lock:
 			payload = [kwp_command.get_command()] + kwp_command.get_data()
 			
@@ -52,6 +53,7 @@ class InterfaceABC(metaclass=ABCMeta):
 
 	def shutdown (self) -> None:
 		"""Clean up, stop communication, close interfaces"""
+		self.stop_keepalive()
 
 	def start_keepalive(self):
 		"""Start the keep-alive thread."""
