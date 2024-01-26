@@ -3,11 +3,13 @@ from ..kwp import KWPCommand, KWPResponse, KWPNegativeStatus, KWPNegativeRespons
 import threading, time
 
 class InterfaceABC(metaclass=ABCMeta):
+	def __init__ (self):
+		self._execute_lock = threading.Lock()
+
 	def init (self, payload: KWPCommand = None, keepalive_payload: KWPCommand = None, keepalive_timeout: int = None) -> None:
 		"""Make the bus ready for sending and receiving commands"""
 		self._init([payload.get_command()] + payload.get_data())
 
-		self._execute_lock = threading.Lock()
 		if (keepalive_payload):
 			self.keepalive_payload = keepalive_payload
 			self.keepalive_timeout = keepalive_timeout
