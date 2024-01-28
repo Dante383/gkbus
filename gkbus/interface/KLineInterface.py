@@ -79,9 +79,12 @@ class KLineInterface(InterfaceABC):
 
 		#if (self.calculate_checksum()) todo
 
-	#	if (rx_id != self.rx_id): # we are only doing this now because we needed to clear this message out of the buffer
-	#		return self.fetch_response()
-
+		if (rx_id != self.rx_id): # we are only doing this now because we needed to clear this message out of the buffer
+			try:
+				return self.fetch_response()
+			except RecursionError:
+				return []
+				
 		return [struct.unpack('>B', status)[0]] + data
 
 	def _execute_internal (self, payload: list[int]) -> list[int]:
