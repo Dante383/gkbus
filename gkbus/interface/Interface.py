@@ -12,7 +12,7 @@ class InterfaceABC(metaclass=ABCMeta):
 			self.keepalive_payload = keepalive_payload
 			self.keepalive_timeout = keepalive_timeout
 			self._keepalive_thread = None 
-			self._last_execution_time = None#time.time()
+			self._last_execution_time = time.time()
 			self._keepalive_event = threading.Event()
 			self.start_keepalive()
 
@@ -42,11 +42,14 @@ class InterfaceABC(metaclass=ABCMeta):
 
 	def _keepalive (self):
 		"""Send keepalive payload if keepalive_timeout elapsed since last command"""
-		while not self._keepalive_event.is_set():
-			elapsed_time = time.time() - self._last_execution_time if self._last_execution_time else float('inf')
-			if elapsed_time >= self.keepalive_timeout:
-				self.execute(self.keepalive_payload)
-			time.sleep(1)
+		try:
+			while not self._keepalive_event.is_set():
+				elapsed_time = time.time() - self._last_execution_time if self._last_execution_time else float('inf')
+				if elapsed_time >= self.keepalive_timeout:
+					self.execute(self.keepalive_payload)
+				time.sleep(1)
+		except KeyboardInterrupt:
+			pass
 
 	def set_timeout (self, timeout: int | None = None):
 		"""Set timeout for the underlaying socket. Pass None to use the default value."""
