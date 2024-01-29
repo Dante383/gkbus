@@ -1,6 +1,7 @@
 from abc import ABCMeta
 from ..kwp import KWPCommand, KWPResponse, KWPNegativeStatus, KWPNegativeResponseException
 import threading, time
+from gkbus import GKBusTimeoutException
 
 class InterfaceABC(metaclass=ABCMeta):
 	def init (self, payload: KWPCommand = None, keepalive_payload: KWPCommand = None, keepalive_timeout: int = None) -> None:
@@ -46,7 +47,10 @@ class InterfaceABC(metaclass=ABCMeta):
 			while not self._keepalive_event.is_set():
 				elapsed_time = time.time() - self._last_execution_time if self._last_execution_time else float('inf')
 				if elapsed_time >= self.keepalive_timeout:
-					self.execute(self.keepalive_payload)
+					try:
+						self.execute(self.keepalive_payload)
+					except (gkbus.GKBusTimeoutException):
+						break
 				time.sleep(1)
 		except KeyboardInterrupt:
 			pass

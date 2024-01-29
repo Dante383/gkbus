@@ -59,18 +59,32 @@ class KLineInterface(InterfaceABC):
 		if (len(counter) == 0):
 			raise GKBusTimeoutException()
 
-		rx_id, = struct.unpack('>H', self._read(2))
+		rx_id = self._read(2)
+		if (len(rx_id) < 2):
+			raise GKBusTimeoutException()			
+
+		rx_id, = struct.unpack('>H', rx_id)
 
 		if (counter == b'\x80'): # more than 127 bytes incoming, counter overflowed. counter is gonna come after IDs
-			counter, = struct.unpack('>B', self._read(1))
+			counter = self._read(1)
+			if (len(counter) < 1):
+				raise GKBusTimeoutException()
+			counter, = struct.unpack('>B', counter)
 		else:
 			counter = struct.unpack('>B', counter)[0]-0x80
 
 		status = self._read(1)
+		if (len(status) < 1):
+			raise GKBusTimeoutException()
 
-		data = list(self._read(counter-1))
+		data = self._read(counter-1)
+		if (len(data) < counter-1):
+			raise GKBusTimeoutException()
+		data = list(data)
 
 		checksum = self._read(1)
+		if (len(checksum) < 1):
+			raise GKBusTimeoutException()
 
 		if (status == b'\x7F'):
 			if (0x78 in data): 
@@ -79,8 +93,11 @@ class KLineInterface(InterfaceABC):
 
 		#if (self.calculate_checksum()) todo
 
-		if (rx_id != self.rx_id):
-			self.shutdown()
+		if (rx_id != self.rx_id): # we are only doing this now because we needed to clear this message out of the buffer
+			try:
+				return self.fetch_response()
+			except RecursionError:
+				self.shutdown()
 
 		return [struct.unpack('>B', status)[0]] + data
 
