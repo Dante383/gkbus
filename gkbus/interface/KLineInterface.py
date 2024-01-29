@@ -53,7 +53,7 @@ class KLineInterface(InterfaceABC):
 		payload += [self.calculate_checksum(payload)]
 		return bytes(payload)
 
-	def fetch_response (self) -> list[int]:
+	def fetch_response (self, recursion_level: int = 0) -> list[int]:
 		counter = self._read(1)
 
 		rx_id, = struct.unpack('>H', self._read(2))
@@ -77,11 +77,10 @@ class KLineInterface(InterfaceABC):
 		#if (self.calculate_checksum()) todo
 
 		if (rx_id != self.rx_id): # we are only doing this now because we needed to clear this message out of the buffer
-			try:
-				return self.fetch_response()
-			except RecursionError:
+			if (recursion_level > 3):
 				self.shutdown()
-
+			return self.fetch_response(recursion_level=recursion_level+1)
+			
 		return [struct.unpack('>B', status)[0]] + data
 
 	def _execute_internal (self, payload: list[int]) -> list[int]:
