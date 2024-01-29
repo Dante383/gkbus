@@ -49,7 +49,7 @@ class InterfaceABC(metaclass=ABCMeta):
 				if elapsed_time >= self.keepalive_timeout:
 					try:
 						self.execute(self.keepalive_payload)
-					except (GKBusTimeoutException):
+					except (GKBusTimeoutException, KWPNegativeResponseException, AttributeError):
 						break
 				time.sleep(1)
 		except KeyboardInterrupt:
