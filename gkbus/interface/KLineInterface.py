@@ -56,35 +56,18 @@ class KLineInterface(InterfaceABC):
 	def fetch_response (self) -> list[int]:
 		counter = self._read(1)
 
-		if (len(counter) == 0):
-			raise GKBusTimeoutException()
-
-		rx_id = self._read(2)
-		if (len(rx_id) < 2):
-			raise GKBusTimeoutException()			
-
-		rx_id, = struct.unpack('>H', rx_id)
+		rx_id, = struct.unpack('>H', self._read(2))
 
 		if (counter == b'\x80'): # more than 127 bytes incoming, counter overflowed. counter is gonna come after IDs
-			counter = self._read(1)
-			if (len(counter) < 1):
-				raise GKBusTimeoutException()
-			counter, = struct.unpack('>B', counter)
+			counter, = struct.unpack('>B', self._read(1))
 		else:
 			counter = struct.unpack('>B', counter)[0]-0x80
 
 		status = self._read(1)
-		if (len(status) < 1):
-			raise GKBusTimeoutException()
 
-		data = self._read(counter-1)
-		if (len(data) < counter-1):
-			raise GKBusTimeoutException()
-		data = list(data)
+		data = list(self._read(counter-1))
 
 		checksum = self._read(1)
-		if (len(checksum) < 1):
-			raise GKBusTimeoutException()
 
 		if (status == b'\x7F'):
 			if (0x78 in data): 
@@ -114,6 +97,8 @@ class KLineInterface(InterfaceABC):
 	def _read (self, length: int) -> bytearray:
 		logger.debug('K-Line trying to read {} bytes'.format(length))
 		message = self.socket.read(length)
+		if (len(message) < length):
+			raise GKBusTimeoutException()
 		logger.debug('Success! Received: {}'.format(' '.join([hex(x) for x in message])))
 		return message
 
