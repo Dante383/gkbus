@@ -1,4 +1,5 @@
-from setuptools import find_packages, setup
+from distutils.core import setup
+from setuptools import find_packages
 
 setup(
 	name='gkbus',
