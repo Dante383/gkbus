@@ -6,5 +6,5 @@ setup(
 	version='0.1.791',
 	description='High-level KWP over K-line/CANbus library',
 	author='Dante383',
-	setup_requires=['pyftdi', 'scapy', 'pyserial']
+	install_requires=['pyftdi==0.55.0', 'scapy==2.5.0', 'pyserial==3.5']
 )
