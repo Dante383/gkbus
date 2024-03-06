@@ -1,0 +1,2 @@
+class GKBusInterfaceException (Exception):
+	pass
