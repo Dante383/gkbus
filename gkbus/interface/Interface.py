@@ -55,7 +55,7 @@ class InterfaceABC(metaclass=ABCMeta):
 		except KeyboardInterrupt:
 			pass
 
-	def set_timeout (self, timeout: int | None = None):
+	def set_timeout (self, timeout: int = None):
 		"""Set timeout for the underlaying socket. Pass None to use the default value."""
 
 	def shutdown (self) -> None:

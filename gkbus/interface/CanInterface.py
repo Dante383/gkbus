@@ -25,7 +25,7 @@ class CanInterface(InterfaceABC):
 				return list(response.data)
 		return data 
 
-	def set_timeout (self, timeout: int | None = None):
+	def set_timeout (self, timeout: int = None):
 		if (timeout == None):
 			self.socket.timeout = 5
 		else:

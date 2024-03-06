@@ -101,7 +101,7 @@ class KLineInterface(InterfaceABC):
 		logger.debug('Success! Received: {}'.format(' '.join([hex(x) for x in message])))
 		return message
 
-	def set_timeout (self, timeout: int | None = None):
+	def set_timeout (self, timeout: int = None):
 		if (timeout == None):
 			self.socket.socket.timeout = 5
 		else:
