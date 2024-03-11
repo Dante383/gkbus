@@ -18,6 +18,9 @@ class KWPCommand:
 	def get_command (self) -> int:
 		return self.command
 
+	def __str__ (self) -> str:
+		return '<KWPCommand: {} {}>'.format(hex(self.get_command()), ' '.join([hex(x) for x in self.get_data()]))
+
 class KWPCommandWithSubservices(KWPCommand):
 	def __init__ (self, subservice: int, *kwargs):
 		self.subservice: Enum = subservice
