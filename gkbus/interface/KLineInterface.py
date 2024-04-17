@@ -1,3 +1,4 @@
+from typing import List
 import time, logging, struct
 from .Interface import InterfaceABC
 from .kline.KLineSerial import KLineSerial
@@ -32,13 +33,13 @@ class KLineInterface(InterfaceABC):
 
 		self.set_timeout(5)
 
-	def calculate_checksum (self, payload: list[int]) -> int:
+	def calculate_checksum (self, payload: List[int]) -> int:
 		checksum = 0x0
 		for byte in payload:
 			checksum += byte
 		return checksum & 0xFF
 
-	def build_payload (self, data: list[int]) -> bytearray:
+	def build_payload (self, data: List[int]) -> bytearray:
 		data_length = len(data)
 
 		if (data_length < 127):
@@ -53,7 +54,7 @@ class KLineInterface(InterfaceABC):
 		payload += [self.calculate_checksum(payload)]
 		return bytes(payload)
 
-	def fetch_response (self, recursion_level: int = 0) -> list[int]:
+	def fetch_response (self, recursion_level: int = 0) -> List[int]:
 		counter = self._read(1)
 
 		rx_id, = struct.unpack('>H', self._read(2))
@@ -83,7 +84,7 @@ class KLineInterface(InterfaceABC):
 			
 		return [struct.unpack('>B', status)[0]] + data
 
-	def _execute_internal (self, payload: list[int]) -> list[int]:
+	def _execute_internal (self, payload: List[int]) -> List[int]:
 		self._write(self.build_payload(payload))
 		response = self.fetch_response()
 

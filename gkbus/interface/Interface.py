@@ -2,6 +2,7 @@ from abc import ABCMeta
 from ..kwp import KWPCommand, KWPResponse, KWPNegativeStatus, KWPNegativeResponseException
 import threading, time
 from gkbus import GKBusTimeoutException
+from typing import List
 
 class InterfaceABC(metaclass=ABCMeta):
 	def init (self, payload: KWPCommand = None, keepalive_payload: KWPCommand = None, keepalive_timeout: int = None) -> None:
@@ -17,7 +18,7 @@ class InterfaceABC(metaclass=ABCMeta):
 			self._keepalive_event = threading.Event()
 			self.start_keepalive()
 
-	def _init (self, payload: list[int]) -> None:
+	def _init (self, payload: List[int]) -> None:
 		"""Make the bus ready for sending and receiving commands"""
 
 	def execute (self, kwp_command: KWPCommand) -> KWPResponse:

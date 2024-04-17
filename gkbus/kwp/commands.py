@@ -1,6 +1,7 @@
 import struct
 from .KWPCommand import KWPCommand, KWPCommandWithSubservices
 from .enums import *
+from typing import List
 
 class AccessTimingParameters(KWPCommandWithSubservices): # TimingParameterIdentifier
 	command = 0x83
@@ -196,13 +197,13 @@ class WriteDataByIdentifier(KWPCommand):
 class WriteDataByLocalIdentifier(KWPCommand):
 	command = 0x3B
 
-	def __init__ (self, record_local_identifier: int, record_value: list[int]):
+	def __init__ (self, record_local_identifier: int, record_value: List[int]):
 		self.set_data([record_local_identifier] + record_value)
 
 class WriteMemoryByAddress(KWPCommand):
 	command = 0x3D
 
-	def __init__ (self, offset: int, data_to_write: list[int]):
+	def __init__ (self, offset: int, data_to_write: List[int]):
 		size = len(data_to_write)
 
 		address = struct.pack('>L', offset)[1:]

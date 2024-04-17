@@ -1,3 +1,4 @@
+from typing import List
 from scapy.config import conf
 conf.contribs['CANSocket'] = {'use-python-can': False}
 conf.contribs['ISOTP'] = {'use-can-isotp-kernel-module': True}
@@ -13,7 +14,7 @@ class CanInterface(InterfaceABC):
 	def __init__ (self, rx_id: int, tx_id: int, interface: str = 'can0'):
 		self.socket = ISOTPNativeSocket(iface=interface, tx_id=tx_id, rx_id=rx_id, padding=True)
 
-	def _execute_internal (self, payload: list[int]) -> list[int]:
+	def _execute_internal (self, payload: List[int]) -> List[int]:
 		response = self.socket.sr1(ISOTP(bytes(payload)), verbose=False)
 
 		data = list(response.data)
