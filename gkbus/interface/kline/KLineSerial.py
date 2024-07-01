@@ -6,13 +6,6 @@ from typing import List
 logger = logging.getLogger(__name__)
 
 class KLineSerial:
-	HIGH = bytes([0x01])
-	LOW = bytes([0x0])
-
-	TIMEOUT_IDLE_BUS_BEFORE_INIT = 3000/1000
-	TIMEOUT_POST_INIT = 50/1000
-	TIMEOUT_WAIT_FOR_ECHO = 0 #was 5/1000  ms/1000
-	TIMEOUT_ECHO_PER_BYTE = 0 #was 3/1000
 	TIMEOUT_AFTER_REQUEST = (30 + 20)/1000
 
 	def __init__ (self, iface, baudrate):
@@ -46,9 +39,8 @@ class KLineSerial:
 		self.socket.write(payload)
 
 		while self.socket.out_waiting > 0:
-			time.sleep(0.01)
+			time.sleep(0.001)
 
-		time.sleep(self.TIMEOUT_WAIT_FOR_ECHO + (self.TIMEOUT_ECHO_PER_BYTE * len(payload)))
 		self.read(len(payload))
 		time.sleep(self.TIMEOUT_AFTER_REQUEST)
 
