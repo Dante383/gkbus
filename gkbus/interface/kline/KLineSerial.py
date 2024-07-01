@@ -1,7 +1,6 @@
 import time, sys, logging
-from pyftdi.ftdi import Ftdi
-import pyftdi.serialext
 import serial
+import serial.tools.list_ports
 from typing import List
 
 logger = logging.getLogger(__name__)
@@ -17,54 +16,30 @@ class KLineSerial:
 	TIMEOUT_AFTER_REQUEST = (30 + 20)/1000
 
 	def __init__ (self, iface, baudrate):
+		self.iface, self.baudrate = iface, baudrate
 		try:
-			Ftdi().get_device(iface)
-		except pyftdi.usbtools.UsbToolsError:
-			print('[!] Device {} not found!'.format(iface))
-			Ftdi().show_devices()
+			self.socket = serial.Serial(iface, baudrate, timeout=0.4)
+		except serial.serialutil.SerialException:
+			print('[!] Device {} not found! Available devices:\n'.format(iface))
+			print('\n'.join([device[1] + ':' + device[0] for device in KLineSerial.available_devices()]))
 			sys.exit(1)
-
-		self.iface = iface 
-		self.baudrate = baudrate
-		self.socket = pyftdi.serialext.serial_for_url(self.iface, baudrate=self.baudrate, timeout=0.4)
-
+			
 	def fast_init_native (self, payload: List[int]):
-		self.socket.send_break(0.025)
-		time.sleep(0.025)
-		self.socket.read(1)
+		self.socket.break_condition = False # safekeeping
+		
+		self.socket.break_condition = True
+		start = time.monotonic()
+		while (time.monotonic() <= start + 0.025):
+			time.sleep(0.001)
+
+		self.socket.break_condition = False
+		
+		start = time.monotonic()
+		while (time.monotonic() <= start + 0.025):
+			time.sleep(0.001)
+
 		self.socket.write(bytes(payload))
-
-	def fast_init_ftdi (self, payload: List[int]):
-		self.socket = Ftdi()
-		self.socket.open_from_url(self.iface)
-		self.socket.purge_buffers()
-		self.socket.set_baudrate(self.baudrate)
-		self.socket.set_line_property(8, 1, 'N')
-		self.socket.set_bitmode(0x01, Ftdi.BitMode(0x01))
-		self.socket.write_data(self.HIGH)
-
-		start = time.monotonic()
-		while (time.monotonic() <= start + 0.35):
-			time.sleep(0.01)
-
-		self.socket.write_data(self.LOW)
-
-		start = time.monotonic()
-		while (time.monotonic() <= start + 0.0245):
-			time.sleep(0.00025)
-
-		self.socket.write_data(self.HIGH)
-
-		start = time.monotonic()
-		while (time.monotonic() <= start + 0.0245):
-			time.sleep(0.00025)
-
-		self.socket.set_bitmode(0x00, Ftdi.BitMode(0x00))
-
-		self.socket.write_data(bytes(payload))
-
-		self.socket = pyftdi.serialext.serial_for_url(self.iface, baudrate=self.baudrate, timeout=0.2)
-
+		self.socket.read(1)
 
 	def write (self, payload):
 		time.sleep(self.TIMEOUT_AFTER_REQUEST*2)
@@ -87,3 +62,10 @@ class KLineSerial:
 			self.socket.close()
 		except AttributeError:
 			pass
+
+	@staticmethod
+	def available_devices () -> List: # [description, url]
+		devices = []
+		for port in reversed(serial.tools.list_ports.comports()):
+			devices.append(("{}: {} {}".format(port.name, port.manufacturer, port.serial_number), port.device))
+		return devices
