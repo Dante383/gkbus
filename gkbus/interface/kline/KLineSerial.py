@@ -18,8 +18,6 @@ class KLineSerial:
 			sys.exit(1)
 			
 	def fast_init_native (self, payload: List[int]):
-		self.socket.break_condition = False # safekeeping
-		
 		self.socket.break_condition = True
 		start = time.monotonic()
 		while (time.monotonic() <= start + 0.025):
@@ -51,6 +49,7 @@ class KLineSerial:
 
 	def shutdown (self) -> None:
 		try:
+			self.socket.break_condition = False
 			self.socket.close()
 		except AttributeError:
 			pass
