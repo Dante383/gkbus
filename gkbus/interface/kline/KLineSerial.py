@@ -19,14 +19,14 @@ class KLineSerial:
 			
 	def fast_init_native (self, payload: List[int]):
 		self.socket.break_condition = True
-		start = time.monotonic()
-		while (time.monotonic() <= start + 0.025):
+		start = time.perf_counter()
+		while (time.perf_counter() <= start + 0.025):
 			time.sleep(0.001)
 
 		self.socket.break_condition = False
 		
-		start = time.monotonic()
-		while (time.monotonic() <= start + 0.025):
+		start = time.perf_counter()
+		while (time.perf_counter() <= start + 0.025):
 			time.sleep(0.001)
 
 		self.socket.write(bytes(payload))
