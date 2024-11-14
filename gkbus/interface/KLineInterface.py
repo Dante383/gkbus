@@ -15,17 +15,17 @@ class KLineInterface(InterfaceABC):
 	def _init (self, payload) -> None:
 		payload = self.build_payload(payload)
 
-		logger.info('fast init..')
-		self.socket.fast_init_native(payload)
+		logger.info('FastInit...')
+		response, elapsed_time_low, elapsed_time_high = self.socket.fast_init_native(payload)
 		try:
 			self.fetch_response()
 			self.set_timeout(5)
 			return
 		except GKBusTimeoutException:
-			logger.warning('fast init failed!')
-
+			logger.warning('FastInit failed!')
+			logger.warning(f"Low Duration: {elapsed_time_low:.6f} seconds")
+			logger.warning(f"High Duration: {elapsed_time_high:.6f} seconds")
 		self.set_timeout(5)
-
 
 	def calculate_checksum (self, payload: List[int]) -> int:
 		checksum = 0x0
