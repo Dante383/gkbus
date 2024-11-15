@@ -16,21 +16,29 @@ class KLineSerial:
 			print('[!] Device {} not found! Available devices:\n'.format(iface))
 			print('\n'.join([device[1] + ':' + device[0] for device in KLineSerial.available_devices()]))
 			sys.exit(1)
-			
-	def fast_init_native (self, payload: List[int]):
+	
+	def fast_init_native(self, payload: List[int]):
+		# FastInit Low (hold break_condition = True for 25 ms)
+		start_time = time.perf_counter()
 		self.socket.break_condition = True
-		start = time.perf_counter()
-		while (time.perf_counter() <= start + 0.025):
-			time.sleep(0.001)
+		self.socket.flush()  # Ensure the break is sent immediately
+		while (time.perf_counter() - start_time) < 0.025:
+			pass  # Busy-wait until 25 ms has passed
+		elapsed_time_low = time.perf_counter() - start_time
 
+		# FastInit High (hold break_condition = False for 25 ms)
+		start_time = time.perf_counter()
 		self.socket.break_condition = False
+		self.socket.flush()  # Ensure the break is sent immediately
+		while (time.perf_counter() - start_time) < 0.025:
+			pass  # Busy-wait until 25 ms has passed
+		elapsed_time_high = time.perf_counter() - start_time
 		
-		start = time.perf_counter()
-		while (time.perf_counter() <= start + 0.025):
-			time.sleep(0.001)
-
+		# Send payload and read response
 		self.socket.write(bytes(payload))
-		self.socket.read(1)
+		response = self.socket.read(1)
+
+		return response, elapsed_time_low, elapsed_time_high
 
 	def write (self, payload):
 		time.sleep(self.TIMEOUT_AFTER_REQUEST*2)
@@ -40,7 +48,7 @@ class KLineSerial:
 			time.sleep(0.001)
 
 		self.read(len(payload))
-		time.sleep(self.TIMEOUT_AFTER_REQUEST)
+		#time.sleep(self.TIMEOUT_AFTER_REQUEST)
 
 	def read (self, length):
 		message = self.socket.read(length)
