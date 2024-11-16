@@ -32,14 +32,15 @@ jobs:
 
       - name: Build Python Package
         run: |
-          python setup.py sdist bdist_wheel
-      - name: Publish package distributions to PyPI
-        uses: pypa/gh-action-pypi-publish@release/v1
+          python -m build
 
-      - name: Create Release
+      - name: Create GitHub Release
         uses: "marvinpinto/action-automatic-releases@latest"
         with:
           repo_token: "${{ secrets.GITHUB_TOKEN }}"
           automatic_release_tag: ${{env.version}}
           prerelease: false
           title: ${{env.version}}
+
+      - name: Publish package distributions to PyPI
+        uses: pypa/gh-action-pypi-publish@release/v1
