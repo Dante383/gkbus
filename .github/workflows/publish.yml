@@ -8,6 +8,9 @@ jobs:
     environment:
       name: pypi
       url: https://pypi.org/p/gkbus
+    permissions:
+      id-token: write
+      contents: write
     steps:
       - name: Checkout
         uses: actions/checkout@v1
