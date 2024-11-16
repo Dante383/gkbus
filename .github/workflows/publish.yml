@@ -6,7 +6,7 @@ jobs:
   pypi-publish:
     runs-on: ubuntu-latest
     environment:
-      name: pypi
+      name: release
       url: https://pypi.org/p/gkbus
     permissions:
       id-token: write
