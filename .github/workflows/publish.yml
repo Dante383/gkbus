@@ -1,27 +1,45 @@
-name: Upload Python Package to PyPI
+name: Create Release and Publish to PyPI
 on:
-    push:
+  push:
+#    branches: master
 jobs:
   pypi-publish:
-    name: Publish release to PyPI
     runs-on: ubuntu-latest
     environment:
       name: pypi
       url: https://pypi.org/p/gkbus
-    permissions:
-      id-token: write
     steps:
-      - uses: actions/checkout@v4
-      - name: Set up Python
-        uses: actions/setup-python@v4
+      - name: Checkout
+        uses: actions/checkout@v1
+
+      - name: Get Build Version
+        run: |
+            buildversion="0.2.${GITHUB_RUN_NUMBER}"
+            echo "Build Number: $buildversion"
+            echo "version=$buildversion" >> $GITHUB_ENV
+
+      - name: Install Python
+        uses: actions/setup-python@v1
         with:
-          python-version: "3.x"
+          python-version: '3.12.7'
+          architecture: 'x64'
+
       - name: Install dependencies
         run: |
-          python -m pip install --upgrade pip
-          pip install setuptools wheel
-      - name: Build package
+          pip install build
+
+      - name: Build Python Package
         run: |
-          python setup.py sdist bdist_wheel
+          python -m build
+
+      - name: Create GitHub Release
+        uses: "marvinpinto/action-automatic-releases@latest"
+        with:
+          repo_token: "${{ secrets.GITHUB_TOKEN }}"
+          automatic_release_tag: ${{env.version}}
+          prerelease: false
+          title: ${{env.version}}
+
       - name: Publish package distributions to PyPI
         uses: pypa/gh-action-pypi-publish@release/v1
+
