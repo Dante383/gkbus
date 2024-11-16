@@ -4,7 +4,7 @@ on:
 #    branches: master
 jobs:
   pypi-publish:
-    runs-on: windows-2019
+    runs-on: ubuntu-latest
     environment:
       name: pypi
       url: https://pypi.org/p/gkbus
@@ -16,9 +16,9 @@ jobs:
 
       - name: Get Build Version
         run: |
-            $buildversion = "0.2."+$Env:GITHUB_RUN_NUMBER
+            buildversion="0.2.${GITHUB_RUN_NUMBER}"
             echo "Build Number: $buildversion"
-            echo "version=$buildversion" | Out-File -FilePath $Env:GITHUB_ENV -Encoding utf-8 -Append
+            echo "version=$buildversion" >> $GITHUB_ENV
 
       - name: Install Python
         uses: actions/setup-python@v1
