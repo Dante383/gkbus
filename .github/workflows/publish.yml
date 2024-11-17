@@ -5,6 +5,9 @@ on:
 jobs:
   pypi-publish:
     runs-on: ubuntu-latest
+    environment:
+      name: release
+      url: https://pypi.org/p/gkbus
     permissions:
       id-token: write
       contents: write
@@ -42,4 +45,4 @@ jobs:
 
       - name: Publish package distributions to PyPI
         uses: pypa/gh-action-pypi-publish@release/v1
-
+        
