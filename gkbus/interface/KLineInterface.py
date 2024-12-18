@@ -10,22 +10,23 @@ class KLineInterface(InterfaceABC):
 	
 	def __init__ (self, interface, baudrate, rx_id, tx_id):
 		self.rx_id, self.tx_id = rx_id, tx_id
+		# Initializing K-Line Interface, reset Adapter and set to KKL mode.
 		self.socket = KLineSerial(interface, baudrate=baudrate)
 
 	def _init (self, payload) -> None:
 		payload = self.build_payload(payload)
 
-		logger.info('FastInit...')
+		# Attempting FastInit
 		response, elapsed_time_low, elapsed_time_high = self.socket.fast_init_native(payload)
 		try:
 			self.fetch_response()
-			self.set_timeout(5)
+			self.set_timeout(2)
 			return
 		except GKBusTimeoutException:
 			logger.warning('FastInit failed!')
 			logger.warning(f"Low Duration: {elapsed_time_low:.6f} seconds")
 			logger.warning(f"High Duration: {elapsed_time_high:.6f} seconds")
-		self.set_timeout(5)
+		self.set_timeout(2)
 
 	def calculate_checksum (self, payload: List[int]) -> int:
 		checksum = 0x0

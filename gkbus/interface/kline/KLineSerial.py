@@ -12,13 +12,28 @@ class KLineSerial:
 		self.iface, self.baudrate = iface, baudrate
 		try:
 			self.socket = serial.Serial(iface, baudrate, timeout=0.4)
+			self.reset_adapter()
+			self.set_adapter_KKL()
 		except serial.serialutil.SerialException:
 			print('[!] Device {} not found! Available devices:\n'.format(iface))
 			print('\n'.join([device[1] + ':' + device[0] for device in KLineSerial.available_devices()]))
 			sys.exit(1)
 	
+	def reset_adapter(self):
+		"""Reset the adapter by toggling DTR."""
+		self.socket.setDTR(1)
+		time.sleep(0.1)
+		self.socket.setDTR(0)
+		time.sleep(0.1)
+
+	def set_adapter_KKL(self):
+		"""Set adapter to KKL mode."""
+		self.socket.setDTR(0)
+		self.socket.setRTS(0)
+		time.sleep(0.1)
+
 	def fast_init_native(self, payload: List[int]):
-		# FastInit Low (hold break_condition = True for 25 ms)
+		"""FastInit Low (hold break_condition = True for 25 ms)"""
 		start_time = time.perf_counter()
 		self.socket.break_condition = True
 		self.socket.flush()  # Ensure the break is sent immediately
@@ -26,7 +41,7 @@ class KLineSerial:
 			pass  # Busy-wait until 25 ms has passed
 		elapsed_time_low = time.perf_counter() - start_time
 
-		# FastInit High (hold break_condition = False for 25 ms)
+		"""FastInit High (hold break_condition = False for 25 ms)"""
 		start_time = time.perf_counter()
 		self.socket.break_condition = False
 		self.socket.flush()  # Ensure the break is sent immediately
@@ -48,11 +63,9 @@ class KLineSerial:
 			time.sleep(0.001)
 
 		self.read(len(payload))
-		#time.sleep(self.TIMEOUT_AFTER_REQUEST)
 
 	def read (self, length):
 		message = self.socket.read(length)
-
 		return message
 
 	def shutdown (self) -> None:
