@@ -1,6 +1,6 @@
 import sys
 from pathlib import Path
-sys.path.insert(0, str(Path(__file__).resolve().parents[2]))
+sys.path.insert(0, str(Path(__file__).resolve().parents[2]) + '/gkbus')
 # Configuration file for the Sphinx documentation builder.
 
 # -- Project information
@@ -29,6 +29,8 @@ intersphinx_mapping = {
 intersphinx_disabled_domains = ['std']
 
 templates_path = ['_templates']
+
+autosummary_generate = True
 
 # -- Options for HTML output
 
