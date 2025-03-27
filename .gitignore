@@ -2,3 +2,4 @@ build
 dist
 gkbus.egg-info
 *.pyc
+__pycache__/
