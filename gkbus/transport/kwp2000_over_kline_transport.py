@@ -26,11 +26,12 @@ class Kwp2000OverKLineTransport (TransportABC):
 		counter = frame[0]
 		tx_rx_id = frame[1:3]
 
-		if (counter == b'\x80'): # more than 127 bytes incoming, counter overflowed. counter is gonna come after IDs
-			counter = frame[3:4] # frame[3] == python would automatically convert it to int. frame[3:3] == byte slice 
+		if (counter == 0x80): # more than 127 bytes incoming, counter overflowed. counter is gonna come after IDs
+			counter = frame[3]+1
+			logger.debug('More than 127 bytes incoming: {}'.format(counter))
 		else:
 			counter = counter-0x80
-			data += frame[3:4]
+			data += frame[3:4] # frame[3] == python would automatically convert it to int. frame[3:3] == byte slice 
 
 		data_and_checksum = self._read(counter)
 		frame += data_and_checksum

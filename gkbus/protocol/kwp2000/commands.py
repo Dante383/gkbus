@@ -1,6 +1,7 @@
-from .kwp2000_command import Kwp2000Command, Kwp2000CommandWithSubservices
+import struct
 from .enums import *
 from typing_extensions import Self
+from .kwp2000_command import Kwp2000Command, Kwp2000CommandWithSubservices
 
 class AccessTimingParameters(Kwp2000CommandWithSubservices): # TimingParameterIdentifier
 	service_identifier = 0x83
