@@ -1,6 +1,5 @@
-import sys
-from pathlib import Path
-sys.path.insert(0, str(Path(__file__).resolve().parents[2]) + '/gkbus')
+import os, sys
+sys.path.insert(0, os.path.abspath('../../gkbus/'))
 # Configuration file for the Sphinx documentation builder.
 
 # -- Project information
@@ -9,8 +8,8 @@ project = 'gkbus'
 copyright = '2025, Dante'
 author = 'Dante'
 
-release = '0.3.0'
-version = '0.3.0'
+release = '0.3.1'
+version = '0.3.1'
 
 # -- General configuration
 

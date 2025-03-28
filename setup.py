@@ -4,7 +4,7 @@ from setuptools import find_packages
 setup(
 	name='gkbus',
 	packages=find_packages(),
-	version='0.3.0',
+	version='0.3.1',
 	description='High-level KWP over K-line/CANbus library',
 	long_description=open('README.md').read(),
 	long_description_content_type='text/markdown',
