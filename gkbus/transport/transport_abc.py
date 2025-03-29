@@ -75,6 +75,7 @@ class TransportABC(ABC):
 
 		:param buffer_size: 0 for unlimited, None for no logging
 		:type buffer_size: int
+		:rtype: Self
 		'''
 		self.buffer_size = buffer_size
 

@@ -15,7 +15,6 @@ High-level KWP over K-Line/CANbus library powering the GKFlasher
     :members:
     :imported-members: 
 
-
 Indices and tables
 ==================
 

@@ -34,32 +34,47 @@ class HardwareABC(ABC):
 	def __init__ (self, port: str, *args) -> None:
 		'''
 		Create a new hardware instance, assign arguments. No logic is executed here
+
+		:param port: string identifier of the port, for example /dev/ttyUSB0 or can0
+		:return:
 		'''
 		self.port = port
 
 	def open (self) -> bool:
 		'''
 		Open the port
+
+		:return: a boolean indicating whether the port was opened successfully
+		:rtype: bool
 		'''
 		pass
 
 	def read (self, length: int) -> bytes:
 		'''
 		Read X bytes from the buffer
+
+		:param length: how many bytes to read
+		:return: read bytes. This value will never be smaller than provided length because in such case a TimeoutException would be thrown
+		:rtype: bytes
 		'''
 		pass
 
 	def write (self, data: bytes) -> int:
 		'''
 		Write to the port
-
+		
+		:param data: bytes to write
 		:return: number of bytes written
+		:rtype: int
 		'''
 		pass
 
 	def close (self) -> bool:
 		'''
 		Close the port
+
+		:return: boolean indicating whether the port was successfully closed
+		:rtype: bool
 		'''
 		pass
 
@@ -68,6 +83,7 @@ class HardwareABC(ABC):
 		Set hardware port baudrate - where applicable
 
 		:param int baudrate: requested baudrate in bits per second
+		:rtype: Self
 		'''
 		pass
 
@@ -76,6 +92,7 @@ class HardwareABC(ABC):
 		Get current hardware port baudrate
 
 		:return: baudrate in bits per second
+		:rtype: int
 		'''
 		return self.baudrate
 
@@ -84,6 +101,7 @@ class HardwareABC(ABC):
 		Set maximum timeout for reading
 
 		:param float timeout: Timeout in seconds
+		:rtype: Self
 		'''
 		pass
 
@@ -92,6 +110,7 @@ class HardwareABC(ABC):
 		Get the maximum timeout for reading
 
 		:return: timeout in seconds
+		:rtype: float
 		'''
 		return self.timeout
 
@@ -100,7 +119,8 @@ class HardwareABC(ABC):
 		'''
 		Enumerate available ports
 
-		:return: list of :py:class:HardwarePort objects
+		:return: list of :py:class:`HardwarePort` objects
+		:rtype: list[HardwarePort]
 		'''
 		pass
 

@@ -1,33 +1,38 @@
 import os, sys
-sys.path.insert(0, os.path.abspath('../../gkbus/'))
+sys.path.insert(0, os.path.abspath('..')) #/../gkbus/'))
+
+import gkbus
+
 # Configuration file for the Sphinx documentation builder.
 
-# -- Project information
+# -- General configuration
+
+extensions = [
+#    'sphinx.ext.duration',
+ #   'sphinx.ext.doctest',
+    'sphinx.ext.autodoc',
+	'sphinx.ext.intersphinx',
+	'sphinx.ext.todo',
+	'sphinx.ext.viewcode',
+    #'sphinx.ext.autosummary',
+]
+
+#intersphinx_disabled_domains = ['std']
+
+templates_path = ['_templates']
+
+source_suffix = '.rst'
 
 project = 'gkbus'
 copyright = '2025, Dante'
 author = 'Dante'
 
-release = '0.3.1'
-version = '0.3.1'
+release = gkbus.__version__
+version = gkbus.__version__
 
-# -- General configuration
+language = 'en'
 
-extensions = [
-    'sphinx.ext.duration',
-    'sphinx.ext.doctest',
-    'sphinx.ext.autodoc',
-    'sphinx.ext.autosummary',
-    'sphinx.ext.intersphinx',
-]
-
-intersphinx_mapping = {
-    'python': ('https://docs.python.org/3/', None),
-    'sphinx': ('https://www.sphinx-doc.org/en/master/', None),
-}
-intersphinx_disabled_domains = ['std']
-
-templates_path = ['_templates']
+#pygments_style = 'flask_theme_support.FlaskyStyle'
 
 autosummary_generate = True
 
@@ -37,5 +42,25 @@ nitpick_ignore = [('py:class', 'type')] # @todo take a closer look
 
 html_theme = 'sphinx_rtd_theme'
 
+html_theme_options = {
+    'show_powered_by': False,
+    'github_user': 'dante383',
+    'github_repo': 'gkbus',
+    'github_banner': True,
+    'show_related': False,
+    'note_bg': '#fff59c',
+}
+
+#html_static_path = ['_static']
+
+html_use_smartypants = False
+
+html_show_sphinx = False
+
 # -- Options for EPUB output
 epub_show_urls = 'footnote'
+
+intersphinx_mapping = {
+    'python': ('https://docs.python.org/3/', None),
+    'sphinx': ('https://www.sphinx-doc.org/en/master/', None),
+}
