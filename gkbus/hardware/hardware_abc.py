@@ -100,7 +100,7 @@ class HardwareABC(ABC):
 		'''
 		Enumerate available ports
 
-		:return: list of HardwarePort objects
+		:return: list of :py:class:HardwarePort objects
 		'''
 		pass
 

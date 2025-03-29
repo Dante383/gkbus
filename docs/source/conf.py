@@ -31,6 +31,8 @@ templates_path = ['_templates']
 
 autosummary_generate = True
 
+nitpick_ignore = [('py:class', 'type')] # @todo take a closer look
+
 # -- Options for HTML output
 
 html_theme = 'sphinx_rtd_theme'
