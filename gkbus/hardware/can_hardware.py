@@ -2,7 +2,10 @@ import os, math
 from sys import platform
 from typing_extensions import Self
 from scapy.config import conf
-conf.contribs['CANSocket'] = {'use-python-can': False}
+if platform.startswith('win32'):
+	conf.contribs['CANSocket'] = {'use-python-can': True}
+else:
+	conf.contribs['CANSocket'] = {'use-python-can': False}
 from scapy.contrib.cansocket import CANSocket
 from scapy.layers.can import CAN, CAN_MTU, CAN_MAX_DLEN
 from scapy.error import Scapy_Exception

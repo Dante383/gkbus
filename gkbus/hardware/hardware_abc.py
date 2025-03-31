@@ -83,7 +83,7 @@ class HardwareABC(ABC):
 		Set hardware port baudrate - where applicable
 
 		:param int baudrate: requested baudrate in bits per second
-		:rtype: Self
+		:rtype: :class:`Self`
 		'''
 		pass
 

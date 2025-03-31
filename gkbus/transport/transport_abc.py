@@ -75,7 +75,7 @@ class TransportABC(ABC):
 
 		:param buffer_size: 0 for unlimited, None for no logging
 		:type buffer_size: int
-		:rtype: Self
+		:rtype: TransportABC
 		'''
 		self.buffer_size = buffer_size
 
@@ -95,6 +95,8 @@ class TransportABC(ABC):
 	def buffer_dump (self) -> list[RawPacket]:
 		'''
 		Retrieve contents of the buffer and empty the buffer
+
+		:return: A list of RawPacket objects
 		'''
 		packets = self.buffer
 		self.buffer = []
