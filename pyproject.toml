@@ -7,4 +7,3 @@ name = "gkbus"
 authors = [{name = "Dante", email = "dante383@protonmail.com"}]
 version = "0.3.6"
 dynamic = ["description"]
-dependencies = ["scapy==2.5.0", "pyserial==3.5"]
