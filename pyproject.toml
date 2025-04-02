@@ -8,6 +8,6 @@ version = "0.4.1"
 dynamic = ["description","dependencies","readme"]
 
 [tool.setuptools.dynamic]
-description = {attr = "gkbus.__description__"}
+description = { entry-point = "setuptools.finalize_distribution_options" }
 dependencies = {file = ["requirements.txt"]}
 readme = {file=["README.md"], content-type="text/markdown"}
