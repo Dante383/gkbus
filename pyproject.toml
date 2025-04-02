@@ -5,6 +5,6 @@ build-backend = "flit_core.buildapi"
 [project]
 name = "gkbus"
 authors = [{name = "Dante", email = "dante383@protonmail.com"}]
-version = "0.3.7"
+version = "0.3.8"
 dynamic = ["description"]
 dependencies = ["scapy==2.5.0", "pyserial==3.5"]
