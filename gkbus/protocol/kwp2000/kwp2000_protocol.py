@@ -82,7 +82,7 @@ class Kwp2000Protocol (ProtocolABC):
 		if response.success():
 			return response
 
-		if response.frame.status == Kwp2000NegativeStatusIdentifierEnum.REQUEST_CORRECTLY_RECEIVED_RESPONSE_PENDING.value:
+		if response.frame.data[1] == Kwp2000NegativeStatusIdentifierEnum.REQUEST_CORRECTLY_RECEIVED_RESPONSE_PENDING.value:
 			logger.info('ECU is busy, request received, response pending.')
 
 			response_pdu = self.transport.read_pdu()
