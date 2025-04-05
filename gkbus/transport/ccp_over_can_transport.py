@@ -1,8 +1,8 @@
-import struct, time
-from sys import platform
-from .transport_abc import TransportABC, RawPacket, PacketDirection
-from ..hardware.hardware_abc import HardwareABC, RawFrame, TimeoutException
+import time
+
 from ..hardware.can_hardware import CanFilter
+from ..hardware.hardware_abc import HardwareABC, RawFrame
+from .transport_abc import PacketDirection, RawPacket, TransportABC
 
 
 class CcpOverCanTransport (TransportABC):

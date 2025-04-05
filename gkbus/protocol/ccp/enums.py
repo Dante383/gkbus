@@ -1,5 +1,6 @@
 from enum import Enum
 
+
 class DisconnectType(Enum):
 	TEMPORARY = 0x00 
 	END_OF_SESSION = 0x01

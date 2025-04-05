@@ -4,17 +4,22 @@ a station on 2 different CAN IDs, interpreting all available
 information and reading from both base pointer (MTA) location
 and specified address with extension
 '''
-import os, sys, inspect
+import inspect
+import os
+import sys
 
 # dirty hack to import gkbus from this package's source code, not the installed package
 currentdir = os.path.dirname(os.path.abspath(inspect.getfile(inspect.currentframe())))
 parentdir = os.path.dirname(currentdir)
 sys.path.insert(0, parentdir) 
 
-import logging, argparse
+import argparse
+import logging
+
 from gkbus.hardware import CanHardware, TimeoutException
-from gkbus.transport import CcpOverCanTransport, RawPacket, PacketDirection
 from gkbus.protocol import ccp
+from gkbus.transport import CcpOverCanTransport, PacketDirection, RawPacket
+
 
 def packet2hex (packet: RawPacket) -> str:
 	direction = 'Incoming' if packet.direction == PacketDirection.INCOMING else 'Outgoing'

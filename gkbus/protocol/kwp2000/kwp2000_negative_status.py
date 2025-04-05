@@ -1,5 +1,6 @@
 from enum import Enum
 
+
 class Kwp2000NegativeStatusIdentifierEnum(Enum):
 	GENERAL_REJECT = 0x10
 	SERVICE_NOT_SUPPORTED = 0x11

@@ -1,5 +1,6 @@
 from ctypes import LittleEndianStructure
 
+
 class LittleEndianBitfield(LittleEndianStructure):
 	_pack_ = 1
 

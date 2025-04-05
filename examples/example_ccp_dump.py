@@ -2,18 +2,21 @@
 CAN Calibration Protocol example. 
 Dump first 512kib of memory to file passed in sys.argv
 '''
-import os, sys, inspect
+import inspect
+import os
+import sys
 
 # dirty hack to import gkbus from this package's source code, not the installed package
 currentdir = os.path.dirname(os.path.abspath(inspect.getfile(inspect.currentframe())))
 parentdir = os.path.dirname(currentdir)
 sys.path.insert(0, parentdir) 
 
-from gkbus.hardware import CanHardware, TimeoutException
-from gkbus.transport import CcpOverCanTransport, RawPacket, PacketDirection
-from gkbus.protocol import ccp
+import argparse
+import logging
 
-import logging, argparse
+from gkbus.hardware import CanHardware, TimeoutException
+from gkbus.protocol import ccp
+from gkbus.transport import CcpOverCanTransport, PacketDirection, RawPacket
 
 SIZE_BYTES = 524290
 

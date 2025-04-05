@@ -1,8 +1,17 @@
+import logging
+import time
+
 import serial
 import serial.tools.list_ports
-import os, time, logging
 from typing_extensions import Self
-from .hardware_abc import HardwareABC, HardwarePort, RawFrame, OpeningPortException, TimeoutException
+
+from .hardware_abc import (
+	HardwareABC,
+	HardwarePort,
+	OpeningPortException,
+	RawFrame,
+	TimeoutException,
+)
 
 logger = logging.getLogger(__name__)
 

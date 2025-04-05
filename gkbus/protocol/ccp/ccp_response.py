@@ -1,5 +1,6 @@
 from dataclasses import dataclass
-from enum import IntEnum, Enum, auto
+from enum import Enum, auto
+
 
 class CcpReturnCodeCategory (Enum):
 	'''

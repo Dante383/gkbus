@@ -1,6 +1,8 @@
-import struct, time, logging
-from .transport_abc import TransportABC, RawPacket, PacketDirection
+import logging
+import time
+
 from ..hardware.hardware_abc import HardwareABC, RawFrame
+from .transport_abc import PacketDirection, RawPacket, TransportABC
 
 logger = logging.getLogger(__name__)
 

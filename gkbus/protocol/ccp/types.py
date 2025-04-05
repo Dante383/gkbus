@@ -1,5 +1,7 @@
 from ctypes import c_uint8
+
 from ...utils import LittleEndianBitfield
+
 
 class ResourceMaskBitfield(LittleEndianBitfield):
 	_fields_ = [ # res - reserved

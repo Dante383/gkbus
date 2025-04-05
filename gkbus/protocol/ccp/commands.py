@@ -1,7 +1,9 @@
 from typing import Union
+
 from .ccp_command import CcpCommand
-from .enums import DisconnectType, DataTransmissionRequest, DataTransmissionMode
+from .enums import DataTransmissionMode, DataTransmissionRequest, DisconnectType
 from .types import ResourceMaskBitfield, SessionStatusBitfield
+
 
 class Connect(CcpCommand):
 	'''
@@ -390,7 +392,7 @@ class Program(CcpCommand):
 			raise ValueError(f'Invalid requested size: {size}. Maximum value is 5')
 
 		if len(data) > 5:
-			raise ValueError(f'Invalid data size. Maximum length is 5')
+			raise ValueError('Invalid data size. Maximum length is 5')
 
 		self.data = size.to_bytes(1, 'little') + data
 
@@ -408,7 +410,7 @@ class Program6Bytes(CcpCommand):
 
 	def init (self, data: bytes) -> None:
 		if len(data) > 6:
-			raise ValueError(f'Invalid data size. Maximum length is 6')
+			raise ValueError('Invalid data size. Maximum length is 6')
 
 		self.data = data
 

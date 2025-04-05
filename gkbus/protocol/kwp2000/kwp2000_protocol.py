@@ -1,13 +1,15 @@
-import logging, threading, time
-from typing import Union
+import logging
+import threading
+import time
 from dataclasses import dataclass
-from ..protocol_abc import ProtocolABC, ProtocolException
-from ...transport import Kwp2000OverKLineTransport
+from typing import Union
+
 from ...hardware import TimeoutException
+from ...transport import Kwp2000OverKLineTransport
+from ..protocol_abc import ProtocolABC, ProtocolException
 from .kwp2000_command import Kwp2000Command
-from .commands import StartCommunication
-from .kwp2000_response import Kwp2000ResponseFrame, Kwp2000Response
 from .kwp2000_negative_status import Kwp2000NegativeStatus, Kwp2000NegativeStatusIdentifierEnum
+from .kwp2000_response import Kwp2000Response, Kwp2000ResponseFrame
 
 logger = logging.getLogger(__name__)
 

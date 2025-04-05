@@ -1,17 +1,26 @@
-import os, math, time
+import os
+import time
 from dataclasses import dataclass
 from sys import platform
-from typing_extensions import Self
-from typing import Union
+
 from scapy.config import conf
+from typing_extensions import Self
+
 if platform.startswith('win32'):
 	conf.contribs['CANSocket'] = {'use-python-can': True}
 else:
 	conf.contribs['CANSocket'] = {'use-python-can': False}
 	from scapy.contrib.cansocket import CANSocket
-from scapy.layers.can import CAN, CAN_MTU, CAN_MAX_DLEN
 from scapy.error import Scapy_Exception
-from .hardware_abc import HardwareABC, HardwarePort, RawFrame, OpeningPortException, SendingException, TimeoutException
+from scapy.layers.can import CAN, CAN_MAX_DLEN, CAN_MTU
+
+from .hardware_abc import (
+	HardwareABC,
+	HardwarePort,
+	OpeningPortException,
+	RawFrame,
+	TimeoutException,
+)
 
 CAN_HEADER_LEN = CAN_MTU-CAN_MAX_DLEN
 

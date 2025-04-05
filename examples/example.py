@@ -1,15 +1,19 @@
-import os, sys, inspect
+import inspect
+import os
+import sys
 
 # dirty hack to import gkbus from this package's source code, not the installed package
 currentdir = os.path.dirname(os.path.abspath(inspect.getfile(inspect.currentframe())))
 parentdir = os.path.dirname(currentdir)
 sys.path.insert(0, parentdir) 
 
-from gkbus.hardware import KLineHardware, CanHardware
-from gkbus.transport import Kwp2000OverKLineTransport, Kwp2000OverCanTransport
-from gkbus.protocol import kwp2000
+import argparse
+import logging
 
-import logging, argparse
+from gkbus.hardware import CanHardware, KLineHardware
+from gkbus.protocol import kwp2000
+from gkbus.transport import Kwp2000OverKLineTransport
+
 
 def main():
 	print('available KLineHardware ports')

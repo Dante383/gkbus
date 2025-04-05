@@ -1,12 +1,10 @@
 import logging
 from dataclasses import dataclass
 
+from ...transport import TransportABC
 from ..protocol_abc import ProtocolABC, ProtocolException
-from ...transport import CcpOverCanTransport, TransportABC
-from ...hardware import TimeoutException
-
 from .ccp_command import CcpCommand
-from .ccp_response import CcpResponse, CcpReturnCode, CcpResponseFrame
+from .ccp_response import CcpResponse, CcpResponseFrame, CcpReturnCode
 
 logger = logging.getLogger(__name__)
 

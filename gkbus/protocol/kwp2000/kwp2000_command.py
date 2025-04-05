@@ -1,5 +1,6 @@
 from typing_extensions import Self
 
+
 class Kwp2000Command:
 	service_identifier: int = 0x0
 

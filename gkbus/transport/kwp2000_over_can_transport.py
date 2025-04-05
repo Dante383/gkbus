@@ -1,14 +1,17 @@
-import struct, time
+import time
 from sys import platform
+
 from scapy.config import conf
+
 if platform.startswith('win32'):
 	conf.contribs['ISOTP'] = {'use-can-isotp-kernel-module': False}
 else:
 	conf.contribs['ISOTP'] = {'use-can-isotp-kernel-module': True}
 from scapy.contrib.isotp import *
-from .transport_abc import TransportABC, RawPacket, PacketDirection
-from ..hardware.hardware_abc import HardwareABC, TimeoutException
+
 from ..hardware.can_hardware import CanFilter
+from ..hardware.hardware_abc import HardwareABC, TimeoutException
+from .transport_abc import PacketDirection, RawPacket, TransportABC
 
 
 class Kwp2000OverCanTransport (TransportABC):

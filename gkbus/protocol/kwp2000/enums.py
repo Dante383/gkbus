@@ -1,4 +1,5 @@
-from enum import Enum 
+from enum import Enum
+
 
 class TimingParameterIdentifier(Enum):
 	READ_LIMITS_OF_POSSIBLE_TIMING_PARAMETERS = 0x00

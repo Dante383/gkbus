@@ -1,5 +1,6 @@
 from typing_extensions import Self
 
+
 class CcpCommand:
 	code = 0x0
 

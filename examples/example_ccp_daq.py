@@ -3,18 +3,22 @@ CAN Calibration Protocol example of the Data Acquisition module.
 There are some weird calculations happening in this example 
 around the CAN identifier area. This is most likely a SIMK43 quirk and should be ignored
 '''
-import os, sys, inspect
+import inspect
+import os
+import sys
 
 # dirty hack to import gkbus from this package's source code, not the installed package
 currentdir = os.path.dirname(os.path.abspath(inspect.getfile(inspect.currentframe())))
 parentdir = os.path.dirname(currentdir)
 sys.path.insert(0, parentdir) 
 
-import logging, argparse
+import argparse
+import logging
 from dataclasses import dataclass
-from gkbus.hardware import CanHardware, CanFilter, TimeoutException
-from gkbus.transport import CcpOverCanTransport, TransportABC, RawPacket, PacketDirection
+
+from gkbus.hardware import CanFilter, CanHardware
 from gkbus.protocol import ccp
+from gkbus.transport import CcpOverCanTransport, PacketDirection, RawPacket, TransportABC
 
 CAN_TX_ID = 0x7e8
 CAN_RX_ID = 0x7eA

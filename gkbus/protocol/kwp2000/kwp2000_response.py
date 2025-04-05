@@ -1,5 +1,5 @@
 from dataclasses import dataclass
-from .kwp2000_negative_status import Kwp2000NegativeStatus
+
 
 @dataclass
 class Kwp2000ResponseFrame:

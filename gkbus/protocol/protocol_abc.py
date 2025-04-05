@@ -1,6 +1,9 @@
 from abc import ABC
+
 from typing_extensions import Self
+
 from ..transport.transport_abc import TransportABC
+
 
 class ProtocolException(IOError):
 	pass

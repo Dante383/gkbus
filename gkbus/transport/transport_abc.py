@@ -1,8 +1,11 @@
 from abc import ABC
 from dataclasses import dataclass
 from enum import Enum
+
 from typing_extensions import Self
+
 from ..hardware.hardware_abc import HardwareABC
+
 
 class PacketDirection(Enum):
 	INCOMING = 0
