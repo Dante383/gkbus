@@ -45,12 +45,7 @@ nitpick_ignore = [('py:class', 'type')] # @todo take a closer look
 html_theme = 'sphinx_rtd_theme'
 
 html_theme_options = {
-    'show_powered_by': False,
-    'github_user': 'dante383',
-    'github_repo': 'gkbus',
-    'github_banner': True,
-    'show_related': False,
-    'note_bg': '#fff59c',
+
 }
 
 #html_static_path = ['_static']
