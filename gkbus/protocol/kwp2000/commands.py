@@ -34,7 +34,7 @@ class ControlDTCSetting(Kwp2000Command):
 class DisableNormalMessageTransmission(Kwp2000Command):
 	service_identifier = 0x28
 
-	def __init__(self, response_type: ResponseType):
+	def init(self, response_type: ResponseType) -> None:
 		self.set_data(bytes([response_type.value]))
 
 class DynamicallyDefineLocalIdentifier(Kwp2000Command):
@@ -49,19 +49,19 @@ class ECUReset(Kwp2000Command):
 	'''
 	service_identifier = 0x11
 
-	def __init__ (self, reset_mode: ResetMode):
+	def init (self, reset_mode: ResetMode):
 		self.set_data(bytes([reset_mode.value]))
 
 class EnableNormalMessageTransmission(Kwp2000Command):
 	service_identifier = 0x29
 
-	def __init__ (self, response_type: ResponseType):
+	def init (self, response_type: ResponseType) -> None:
 		self.set_data(bytes([response_type.value]))
 
 class InputOutputControlByLocalIdentifier(Kwp2000Command):
 	service_identifier = 0x30
 
-	def __init__ (self, control_identifier: int, control_parameter: InputOutputControlParameter, *control_state):
+	def init (self, control_identifier: int, control_parameter: InputOutputControlParameter, *control_state):
 		self.set_data(bytes([control_identifier, control_parameter.value, *control_state]))
 
 class ReadDataByIdentifier(Kwp2000Command):
@@ -70,7 +70,7 @@ class ReadDataByIdentifier(Kwp2000Command):
 class ReadDataByLocalIdentifier(Kwp2000Command):
 	service_identifier = 0x21
 
-	def __init__ (self, record_local_identifier: int):
+	def init (self, record_local_identifier: int) -> None:
 		self.set_data(bytes([record_local_identifier]))
 
 class ReadDTCsByStatus(Kwp2000Command):
@@ -79,13 +79,13 @@ class ReadDTCsByStatus(Kwp2000Command):
 class ReadEcuIdentification(Kwp2000Command):
 	service_identifier = 0x1A
 
-	def __init__ (self, identifier):
+	def init (self, identifier):
 		self.set_data(bytes([identifier]))
 
 class ReadMemoryByAddress(Kwp2000Command):
 	service_identifier = 0x23
 
-	def __init__ (self, offset: int = 0x000000, size: int = 0xFE):
+	def init (self, offset: int = 0x000000, size: int = 0xFE):
 		address = struct.pack('>L', offset)[1:]
 
 		self.set_data(bytes([*address, size]))
@@ -93,13 +93,13 @@ class ReadMemoryByAddress(Kwp2000Command):
 class ReadStatusOfDTC(Kwp2000Command):
 	service_identifier = 0x01
 
-	def __init__ (self, dtc):
+	def init (self, dtc):
 		self.set_data(bytes([dtc]))
 
 class RequestDownload(Kwp2000Command):
 	service_identifier = 0x34
 
-	def __init__ (self, 
+	def init (self, 
 			offset: int, 
 			compression_type: CompressionType,
 			encryption_type: EncryptionType,
@@ -114,7 +114,7 @@ class RequestDownload(Kwp2000Command):
 class RequestRoutineResultsByLocalIdentifier(Kwp2000Command):
 	service_identifier = 0x33
 
-	def __init__ (self, routine_identifier: int):
+	def init (self, routine_identifier: int) -> None:
 		self.set_data(bytes([routine_identifier]))
 
 class RequestTransferExit(Kwp2000Command):
@@ -123,12 +123,12 @@ class RequestTransferExit(Kwp2000Command):
 class RequestUpload(Kwp2000Command):
 	service_identifier = 0x35
 
-	def __init__ (self, 
+	def init (self, 
 			offset: int, 
 			compression_type: CompressionType,
 			encryption_type: EncryptionType,
 			size: int
-		):
+		) -> None:
 		address = struct.pack('>L', offset)[1:]
 		data_format = (compression_type.value << 4) | encryption_type.value
 		size = struct.pack('>L', size)[1:]
@@ -156,7 +156,7 @@ class StartCommunication(Kwp2000Command):
 class StartRoutineByLocalIdentifier(Kwp2000Command):
 	service_identifier = 0x31
 
-	def __init__ (self, routine_identifier: int, *routine_entry_option):
+	def init (self, routine_identifier: int, *routine_entry_option) -> None:
 		self.set_data(bytes([routine_identifier, *routine_entry_option]))
 
 class StartDiagnosticSession(Kwp2000Command):
@@ -177,7 +177,7 @@ class StartDiagnosticSession(Kwp2000Command):
 
 	service_identifier = 0x10
 
-	def __init__ (self, session_type: DiagnosticSession, dev_baudrate_identifier: int = None):
+	def init (self, session_type: DiagnosticSession, dev_baudrate_identifier: int = None) -> None:
 		self.set_data(bytes([session_type.value]))
 		# while it's not present in any official documentations, most ECU manufacturers use 
 		# the second parameter of StartDiagnosticSession as a baudrate switch. 
@@ -191,13 +191,13 @@ class StopCommunication(Kwp2000Command):
 class StopRoutineByLocalIdentifier(Kwp2000Command):
 	service_identifier = 0x32
 
-	def __init__ (self, routine_identifier: int, *routine_exit_option):
+	def init (self, routine_identifier: int, *routine_exit_option) -> None:
 		self.set_data(bytes([routine_identifier, *routine_exit_option]))
 
 class TesterPresent(Kwp2000Command):
 	service_identifier = 0x3E
 
-	def __init__ (self, response_type: ResponseType):
+	def init (self, response_type: ResponseType):
 		self.set_data(bytes([response_type.value]))
 
 class TransferData(Kwp2000Command):
@@ -209,13 +209,13 @@ class WriteDataByIdentifier(Kwp2000Command):
 class WriteDataByLocalIdentifier(Kwp2000Command):
 	service_identifier = 0x3B
 
-	def __init__ (self, record_local_identifier: int, record_value: list[int]):
+	def init (self, record_local_identifier: int, record_value: list[int]) -> None:
 		self.set_data(bytes([record_local_identifier] + record_value))
 
 class WriteMemoryByAddress(Kwp2000Command):
 	service_identifier = 0x3D
 
-	def __init__ (self, offset: int, data_to_write: list[int]):
+	def init (self, offset: int, data_to_write: list[int]) -> None:
 		size = len(data_to_write)
 
 		address = struct.pack('>L', offset)[1:]

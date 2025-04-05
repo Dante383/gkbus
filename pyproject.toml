@@ -4,8 +4,36 @@ build-backend = "flit_core.buildapi"
 
 [project]
 name = "gkbus"
+version = "0.4.6"
 readme = "README.md"
 authors = [{name = "Dante", email = "dante383@protonmail.com"}]
-version = "0.4.4"
 dynamic = ["description"]
 dependencies = ["scapy==2.5.0", "pyserial==3.5"]
+
+[project.optional-dependencies]
+lint = [
+  "ruff == 0.11.4",
+  "mypy == 1.15.0",
+]
+
+[tool.ruff]
+line-length = 100
+indent-width = 4
+
+[tool.ruff.format]
+quote-style = "double"
+indent-style = "space"
+line-ending = "auto"
+
+[tool.ruff.lint]
+select = [
+    "F",   # pyflakes
+    "E",   # pycodestyle
+    "I",   # isort
+    "ANN", # flake8 type annotations
+    "RUF", # ruff-specific rules
+]
+fixable = ["ALL"]
+
+[tool.ruff.lint.pydocstyle]
+convention = "google"

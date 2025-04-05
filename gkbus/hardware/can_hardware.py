@@ -1,4 +1,5 @@
 import os, math, time
+from dataclasses import dataclass
 from sys import platform
 from typing_extensions import Self
 from typing import Union
@@ -14,6 +15,11 @@ from .hardware_abc import HardwareABC, HardwarePort, RawFrame, OpeningPortExcept
 
 CAN_HEADER_LEN = CAN_MTU-CAN_MAX_DLEN
 
+@dataclass
+class CanFilter:
+	can_id: int
+	can_mask: int = 0x7ff
+
 class CanHardware(HardwareABC):
 	'''
 	Hardware class for CAN Bus interfaces. Uses Scapy as a backend
@@ -22,29 +28,26 @@ class CanHardware(HardwareABC):
 		Keys: can_id, can_mask
 	'''
 
-	def __init__ (self, port: str, tx_id: int = None, rx_id: int = None, timeout: int = 1) -> None:
-		self.port = port
-		self.tx_id, self.rx_id = tx_id, rx_id
-		self.timeout = timeout
-		self.port_opened = False
-		self.filters = self._build_filters()
+	def __init__ (self, port: str, timeout: int = 1, filters: list[CanFilter] = None) -> None:
+		self.port: str = port
+		self.timeout: float = timeout
+		self.port_opened: bool = False
+		self.filters: list[CanFilter] = filters if filters != None else []
 
 	def _build_filters (self) -> list[dict]:
 		filters = []
 		
-		if self.rx_id:
-			filters.append({'can_id': self.rx_id, 'can_mask': 0x7FF})
-		else:
+		for can_filter in self.filters:
+			filters.append({'can_id': can_filter.can_id, 'can_mask': can_filter.can_mask})
+
+		if len(filters) == 0:
 			filters = None
 
 		return filters
 
 	def open (self) -> bool:
-		if not self.filters and self.rx_id != None: # dirty bypass, @todo: properly implement filters
-			self.filters = self._build_filters()
-
 		try:
-			self.socket = CANSocket(channel=self.port, can_filters=self.filters)
+			self.socket = CANSocket(channel=self.port, can_filters=self._build_filters())
 			self.port_opened = True
 		except (OSError, Scapy_Exception) as e:
 			raise OpeningPortException(e)
@@ -58,12 +61,8 @@ class CanHardware(HardwareABC):
 
 		return RawFrame(identifier=packet.identifier, data=packet.data)
 
-	def write (self, data: bytes, tx_id: int = None) -> int:
-		tx_id = tx_id if tx_id != None else self.tx_id
-		if tx_id == None:
-			raise SendingException('Tried to send without CAN Bus ID specified')
-
-		packet = CAN(identifier=tx_id, data=data)
+	def write (self, frame: RawFrame) -> int:
+		packet = CAN(identifier=frame.identifier, data=frame.data)
 
 		bytes_written = self.socket.send(packet)
 
@@ -86,8 +85,31 @@ class CanHardware(HardwareABC):
 			if (time.time()-time_started) > timeout:
 				raise TimeoutException
 
+	def get_filters (self) -> list[CanFilter]:
+		'''
+		Get active hardware canbus id filters
+		'''
+		return self.filters
+
+	def set_filters (self, filters: list[CanFilter]) -> Self:
+		'''
+		Replace hardware canbus id filters. 
+		This will triger a restart of the socket
+		'''
+		self.filters = filters
+		self.close()
+		self.open()
+
+	def add_filter (self, filter: CanFilter) -> Self:
+		'''
+		Add new hardware canbus id filter
+		This will trigger a restart of the socket
+		'''
+		self.set_filters(self.get_filters() + filter)
+
 	def close (self) -> None:
-		self.socket.close()
+		if hasattr(self, 'socket'):
+			self.socket.close()
 		self.port_opened = False
 
 	def set_baudrate (self, baudrate: int) -> Self:

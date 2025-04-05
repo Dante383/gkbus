@@ -1,7 +1,7 @@
 import logging
 from dataclasses import dataclass
 
-from ..protocol_abc import ProtocolABC
+from ..protocol_abc import ProtocolABC, ProtocolException
 from ...transport import CcpOverCanTransport, TransportABC
 from ...hardware import TimeoutException
 
@@ -10,10 +10,10 @@ from .ccp_response import CcpResponse, CcpReturnCode, CcpResponseFrame
 
 logger = logging.getLogger(__name__)
 
-class CcpException(Exception):
+class CcpException(ProtocolException):
 	pass
 
-class CcpNegativeResponseException(Exception):
+class CcpNegativeResponseException(CcpException):
 	def __init__ (self, return_code: CcpReturnCode) -> None:
 		self.return_code = return_code
 

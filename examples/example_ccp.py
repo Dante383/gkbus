@@ -11,11 +11,10 @@ currentdir = os.path.dirname(os.path.abspath(inspect.getfile(inspect.currentfram
 parentdir = os.path.dirname(currentdir)
 sys.path.insert(0, parentdir) 
 
+import logging, argparse
 from gkbus.hardware import CanHardware, TimeoutException
 from gkbus.transport import CcpOverCanTransport, RawPacket, PacketDirection
 from gkbus.protocol import ccp
-
-import logging, argparse
 
 def packet2hex (packet: RawPacket) -> str:
 	direction = 'Incoming' if packet.direction == PacketDirection.INCOMING else 'Outgoing'
@@ -24,20 +23,18 @@ def packet2hex (packet: RawPacket) -> str:
 	return parsed
 
 def status_bit_to_str (bit: str) -> str:
-	return '{} ({})'.format(bit, 'Available' if bit == '1' else 'Unavailable')
+	return '{} ({})'.format(bit, 'Available' if bit == 1 else 'Unavailable')
 
-def unpack_resource_mask (mask: int) -> dict: 
-	bits = bin(mask)[2:].zfill(8)
-
+def unpack_resource_mask (mask) -> dict: 
 	return {
-		'CAL': status_bit_to_str(bits[0]),
-		'DAQ': status_bit_to_str(bits[1]),
-		'reserved': status_bit_to_str(bits[2]),
-		'reserved': status_bit_to_str(bits[3]),
-		'reserved': status_bit_to_str(bits[4]),
-		'reserved': status_bit_to_str(bits[5]),
-		'PGM (memory programming)': status_bit_to_str(bits[6]),
-		'reserved': status_bit_to_str(bits[7])
+		'CAL': status_bit_to_str(mask.CAL),
+		'DAQ': status_bit_to_str(mask.DAQ),
+		'reserved': status_bit_to_str(mask.res),
+		'reserved': status_bit_to_str(mask.res1),
+		'reserved': status_bit_to_str(mask.res2),
+		'reserved': status_bit_to_str(mask.res3),
+		'PGM (memory programming)': status_bit_to_str(mask.PGM),
+		'reserved': status_bit_to_str(mask.res4)
 	}
 
 def test_availability (ccp_client: ccp.CcpProtocol, station_id: int) -> bool:
@@ -80,14 +77,14 @@ def main():
 	resp = ccp_client.execute(ccp.commands.Connect(station_address=0x01))
 	print(resp)
 
-	print('\nFetching security seed with resource mask 0x02 (DAQ)')
-	seed = ccp_client.execute(ccp.commands.GetSeedForKey(resource_mask=0x02)).get_data()
+	print('\nFetching security seed with resource mask DAQ=1')
+	seed = ccp_client.execute(ccp.commands.GetSeedForKey(resource_mask=ccp.types.ResourceMaskBitfield(DAQ=1))).get_data()
 	print('protection status: {}, seed: {}'.format(seed[0], seed[1:]))
 	
 	print('\nSending security key (UnlockProtection)')
 	resp = ccp_client.execute(ccp.commands.UnlockProtection(key=b'\x44\x45\x45\x54\xC0\x35')).get_data()
 	print('current privilege status resource mask: {}'.format(hex(resp[0])))
-	privilege_status = unpack_resource_mask(resp[1])
+	privilege_status = unpack_resource_mask(ccp.types.ResourceMaskBitfield.from_buffer(bytearray([resp[1]])))
 	print('current privilege status:')
 	for k, v in privilege_status.items():
 		print('    {}: {}'.format(k, v))
@@ -113,12 +110,12 @@ def main():
 	print('slave id length: {}, slave data type qualifier: {}, resource availability mask: {}, resource protection mask: {}'.format(
 		hex(slave_id_length), hex(slave_data_type_qualifier), hex(resource_availability_mask), hex(resource_protection_mask)
 	))
-	resource_availability = unpack_resource_mask(resource_availability_mask)
+	resource_availability = unpack_resource_mask(ccp.types.ResourceMaskBitfield.from_buffer(bytearray([resource_availability_mask])))
 	print('resource availability:')
 	for k, v in resource_availability.items():
 		print('    {}: {}'.format(k, v))
 
-	resource_protection = unpack_resource_mask(resource_protection_mask)
+	resource_protection = unpack_resource_mask(ccp.types.ResourceMaskBitfield.from_buffer(bytearray([resource_protection_mask])))
 	print('resource protection:')
 	for k, v in resource_protection.items():
 		print('    {}: {}'.format(k, v))
@@ -160,7 +157,7 @@ def main():
 	print('\nReading 4 bytes at 0x3E01')
 	data = ccp_client.execute(ccp.commands.ShortUpload(size=4, address_extension=0, address=0x3E01)).get_data()
 	print(data)
-
+	
 	print('\nDumping the buffer')
 	packets = transport.buffer_dump()
 	print('\n'.join([packet2hex(x) for x in packets]))

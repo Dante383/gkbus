@@ -8,15 +8,18 @@ else:
 from scapy.contrib.isotp import *
 from .transport_abc import TransportABC, RawPacket, PacketDirection
 from ..hardware.hardware_abc import HardwareABC, TimeoutException
+from ..hardware.can_hardware import CanFilter
 
 
 class Kwp2000OverCanTransport (TransportABC):
 	def __init__ (self, hardware: HardwareABC, tx_id: hex, rx_id: hex) -> None:
 		self.hardware = hardware
 		self.tx_id, self.rx_id = tx_id, rx_id
-		self.isotp = None # ISOTPSocket(self.hardware.socket, tx_id, rx_id, padding=True)
+		self.isotp = None
 
 	def init (self) -> bool:
+		self.hardware.set_filters([CanFilter(can_id=self.rx_id, can_mask=0x7ff)])
+		
 		if not self.hardware.port_opened:
 			self.hardware.open()
 
@@ -48,7 +51,7 @@ class Kwp2000OverCanTransport (TransportABC):
 
 		if not response:
 			raise TimeoutException
-			
+
 		self.buffer_push(RawPacket(direction=PacketDirection.INCOMING, data=response.data, timestamp=int(time.time() * 1000)))
 
 		return response.data

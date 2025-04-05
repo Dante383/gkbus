@@ -1,7 +1,7 @@
 import logging, threading, time
 from typing import Union
 from dataclasses import dataclass
-from ..protocol_abc import ProtocolABC
+from ..protocol_abc import ProtocolABC, ProtocolException
 from ...transport import Kwp2000OverKLineTransport
 from ...hardware import TimeoutException
 from .kwp2000_command import Kwp2000Command
@@ -11,10 +11,10 @@ from .kwp2000_negative_status import Kwp2000NegativeStatus, Kwp2000NegativeStatu
 
 logger = logging.getLogger(__name__)
 
-class Kwp2000Exception(Exception):
+class Kwp2000Exception(ProtocolException):
 	pass
 
-class Kwp2000NegativeResponseException(Exception):
+class Kwp2000NegativeResponseException(Kwp2000Exception):
 	def __init__ (self, status: Kwp2000NegativeStatus) -> None:
 		self.status = status
 
@@ -34,14 +34,15 @@ class Kwp2000RequestFrame:
 
 class Kwp2000Protocol (ProtocolABC):
 	def open (self) -> bool:
-		return self.transport.init()
+		if not self.transport.hardware.is_open():
+			return self.transport.hardware.open()
+		return True
 
 	def init (self, init_command: Kwp2000Command, keepalive_command: Kwp2000Command = None, keepalive_delay: float = 1.5) -> bool:
-		if not self.transport.hardware.is_open():
-			self.transport.hardware.open()
-			
 		if isinstance(self.transport, Kwp2000OverKLineTransport):
-			init_payload = Kwp2000RequestFrame(init_command.get_service_identifier(), init_command.get_data(as_list=False))
+			self.open()
+			
+			init_payload = Kwp2000RequestFrame(init_command.get_service_identifier(), init_command.get_data())
 
 			try:
 				self.transport.hardware.set_timeout(0.4)
@@ -53,6 +54,8 @@ class Kwp2000Protocol (ProtocolABC):
 				logger.warning('K-Line fast init failed')
 
 			self.transport.hardware.set_timeout(2)
+		else:
+			self.transport.init()
 
 		self._execute_lock = threading.Lock()
 
@@ -68,7 +71,7 @@ class Kwp2000Protocol (ProtocolABC):
 
 
 	def execute (self, command: Kwp2000Command) -> Kwp2000Response:
-		frame = Kwp2000RequestFrame(command.get_service_identifier(), command.get_data(as_list=False))
+		frame = Kwp2000RequestFrame(command.get_service_identifier(), command.get_data())
 
 		with self._execute_lock:
 			response_pdu = self.transport.send_read_pdu(data=frame.to_pdu())

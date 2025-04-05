@@ -24,8 +24,6 @@ def main():
 
 	print('creating hardware')
 	hardware = KLineHardware(ports[0].port)
-	hardware.open()
-
 	transport = Kwp2000OverKLineTransport(hardware, tx_id=0x11, rx_id=0xf1)
 	kwp = kwp2000.Kwp2000Protocol(transport)
 	

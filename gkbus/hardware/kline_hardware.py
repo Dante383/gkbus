@@ -36,12 +36,13 @@ class KLineHardware(HardwareABC):
 
 		return RawFrame(identifier=False, data=message)
 
-	def write (self, data: bytes) -> int:
+	def write (self, frame: RawFrame) -> int:
 		# @todo - this timeout is needed for now, otherwise 
 		# we'll get a timeout when trying to start diagnostic session
 		# find out _why_ is it needed - some magic value instead 
 		# of something calculated shouldnt be required here
 		time.sleep((50/1000)*2)
+		data = frame.data
 		bytes_written = self.socket.write(data)
 
 		while self.socket.out_waiting > 0:

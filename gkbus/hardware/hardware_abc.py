@@ -46,8 +46,8 @@ class HardwareABC(ABC):
 		:param port: string identifier of the port, for example /dev/ttyUSB0 or can0
 		:return:
 		'''
-		self.port = port
-		self.port_opened = False
+		self.port: str = port
+		self.port_opened: bool = False
 
 	def open (self) -> bool:
 		'''
@@ -66,17 +66,17 @@ class HardwareABC(ABC):
 		'''
 		return self.port_opened
 
-	def read (self, length: int) -> bytes:
+	def read (self, length: int) -> RawFrame:
 		'''
 		Read X bytes from the buffer
 
 		:param length: how many bytes to read
-		:return: read bytes. This value will never be smaller than provided length because in such case a TimeoutException would be thrown
-		:rtype: bytes
+		:return: read frame. The data will never be smaller than provided length because in such case a TimeoutException would be thrown
+		:rtype: RawFrame
 		'''
 		pass
 
-	def write (self, data: bytes) -> int:
+	def write (self, data: RawFrame) -> int:
 		'''
 		Write to the port
 		

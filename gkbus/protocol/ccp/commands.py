@@ -1,5 +1,7 @@
+from typing import Union
 from .ccp_command import CcpCommand
 from .enums import DisconnectType, DataTransmissionRequest, DataTransmissionMode
+from .types import ResourceMaskBitfield, SessionStatusBitfield
 
 class Connect(CcpCommand):
 	'''
@@ -9,7 +11,7 @@ class Connect(CcpCommand):
 	'''
 	code = 0x01
 
-	def __init__ (self, station_address: int) -> None:
+	def init (self, station_address: int) -> None:
 		self.data = station_address.to_bytes(2, 'little')
 
 class ExchangeStationIdentifications(CcpCommand):
@@ -43,8 +45,13 @@ class GetSeedForKey(CcpCommand):
 	'''
 	code = 0x12
 
-	def __init__ (self, resource_mask: int) -> None:
-		self.data = resource_mask.to_bytes(1, 'little')
+	def init (self, resource_mask: Union[int, ResourceMaskBitfield]) -> None:
+		if isinstance(resource_mask, ResourceMaskBitfield):
+			resource_mask = bytes(resource_mask)
+		else:
+			resource_mask = resource_mask.to_bytes(1, 'little')
+		
+		self.data = resource_mask
 
 class UnlockProtection(CcpCommand):
 	'''
@@ -57,7 +64,7 @@ class UnlockProtection(CcpCommand):
 	'''
 	code = 0x13
 
-	def __init__ (self, key: bytes) -> None:
+	def init (self, key: bytes) -> None:
 		self.data = key
 
 class SetMemoryTransferAddress(CcpCommand):
@@ -81,7 +88,7 @@ class SetMemoryTransferAddress(CcpCommand):
 	'''
 	code = 0x02
 
-	def __init__ (self, mta_number: int, address_extension: int, address: int) -> None:
+	def init (self, mta_number: int, address_extension: int, address: int) -> None:
 		if mta_number not in [0, 1]:
 			raise ValueError(f'Invalid MTA number: {mta_number}. Valid values are either 0 or 1')
 
@@ -100,7 +107,7 @@ class DataDownload(CcpCommand):
 	'''
 	code = 0x03
 
-	def __init__ (self, size: int, data: bytes) -> None:
+	def init (self, size: int, data: bytes) -> None:
 		if (size > 5):
 			raise ValueError(f'Invalid size: {size}. Max value is 5')
 
@@ -121,7 +128,7 @@ class DataDownload6Bytes(CcpCommand):
 	'''
 	code = 0x23
 
-	def __init__ (self, data: bytes) -> None:
+	def init (self, data: bytes) -> None:
 		if (len(data) > 6):
 			raise ValueError('Invalid data size. Max length is 6')
 
@@ -139,7 +146,7 @@ class DataUpload(CcpCommand):
 	'''
 	code = 0x04
 
-	def __init__ (self, size: int) -> None:
+	def init (self, size: int) -> None:
 		if (size > 5):
 			raise ValueError(f'Invalid requested size: {size}. Maximum value is 5')
 
@@ -158,7 +165,7 @@ class ShortUpload(CcpCommand):
 	'''
 	code = 0x0F
 
-	def __init__ (self, size: int, address_extension: int, address: int) -> None:
+	def init (self, size: int, address_extension: int, address: int) -> None:
 		if (size > 5):
 			raise ValueError(f'Invalid requested size: {size}. Maximum value is 5')
 
@@ -191,7 +198,7 @@ class GetSizeOfDaqList(CcpCommand):
 	'''
 	code = 0x14
 
-	def __init__ (self, list_number: int, can_identifier: int = 0) -> None:
+	def init (self, list_number: int, can_identifier: int = 0) -> None:
 		self.data = list_number.to_bytes(1, 'little') + b'\xFF' + can_identifier.to_bytes(4, 'little')
 
 class SetDaqListPointer(CcpCommand):
@@ -207,7 +214,7 @@ class SetDaqListPointer(CcpCommand):
 	'''
 	code = 0x15
 
-	def __init__ (self, list_number: int, odt_number: int, element_number: int) -> None:
+	def init (self, list_number: int, odt_number: int, element_number: int) -> None:
 		self.data = bytes([list_number, odt_number, element_number])
 
 class WriteDaqListEntry(CcpCommand):
@@ -230,7 +237,7 @@ class WriteDaqListEntry(CcpCommand):
 	'''
 	code = 0x16
 
-	def __init__ (self, size: int, address_extension: int, address: int) -> None:
+	def init (self, size: int, address_extension: int, address: int) -> None:
 		self.data = bytes([size, address_extension]) + address.to_bytes(4, 'little')
 
 class StartStopDataTransmission(CcpCommand):
@@ -262,7 +269,7 @@ class StartStopDataTransmission(CcpCommand):
 	'''
 	code = 0x06
 
-	def __init__ (self, mode: DataTransmissionMode, daq_list_number: int, last_odt_number: int, event_channel: int, prescaler: int) -> None:
+	def init (self, mode: DataTransmissionMode, daq_list_number: int, last_odt_number: int, event_channel: int, prescaler: int) -> None:
 		self.data = bytes([mode.value, daq_list_number, last_odt_number, event_channel]) + prescaler.to_bytes(2, 'little')
 
 class Disconnect(CcpCommand):
@@ -285,7 +292,7 @@ class Disconnect(CcpCommand):
 	'''
 	code = 0x07
 
-	def __init__ (self, disconnect_type: DisconnectType, station_address: int) -> None:
+	def init (self, disconnect_type: DisconnectType, station_address: int) -> None:
 		self.data = disconnect_type.value.to_bytes(1, 'little') + station_address.to_bytes(2, 'little')
 
 class SetSessionStatus(CcpCommand):
@@ -315,8 +322,13 @@ class SetSessionStatus(CcpCommand):
 	'''
 	code = 0x0C
 
-	def __init__ (self, status_bits: int) -> None:
-		self.data = status_bits.to_bytes(1, 'little')
+	def init (self, status: Union[int, SessionStatusBitfield]) -> None:
+		if isinstance(status, SessionStatusBitfield):
+			status = bytes(status)
+		else:
+			status = status.to_bytes(1, 'little')
+
+		self.data = status
 
 class GetSessionStatus(CcpCommand):
 	'''
@@ -343,7 +355,7 @@ class BuildChecksum(CcpCommand):
 	'''
 	code = 0x0E
 
-	def __init__ (self, size: int) -> None:
+	def init (self, size: int) -> None:
 		self.data = size.to_bytes(4, 'little') # @todo not sure about LSB here
 
 class ClearMemory(CcpCommand):
@@ -357,8 +369,8 @@ class ClearMemory(CcpCommand):
 	'''
 	code = 0x10
 
-	def __init__ (self, size: int) -> None:
-		self.data = size.to_bytes(4, 'little') # @todo not sure about LSB here
+	def init (self, size: int) -> None:
+		self.data = size.to_bytes(4, 'little')
 
 class Program(CcpCommand):
 	'''
@@ -373,7 +385,7 @@ class Program(CcpCommand):
 	'''
 	code = 0x18
 
-	def __init__ (self, size: int, data: bytes) -> None:
+	def init (self, size: int, data: bytes) -> None:
 		if size > 5:
 			raise ValueError(f'Invalid requested size: {size}. Maximum value is 5')
 
@@ -394,7 +406,7 @@ class Program6Bytes(CcpCommand):
 	'''
 	code = 0x22
 
-	def __init__ (self, data: bytes) -> None:
+	def init (self, data: bytes) -> None:
 		if len(data) > 6:
 			raise ValueError(f'Invalid data size. Maximum length is 6')
 
@@ -411,8 +423,8 @@ class MoveMemoryBlock(CcpCommand):
 	'''
 	code = 0x19
 
-	def __init__ (self, size: int) -> None:
-		self.data = size.to_bytes(4, 'little') # @todo not sure about LSB here
+	def init (self, size: int) -> None:
+		self.data = size.to_bytes(4, 'little')
 
 class DiagnosticService(CcpCommand):
 	'''
@@ -426,8 +438,8 @@ class DiagnosticService(CcpCommand):
 	'''
 	code = 0x20
 
-	def __init__ (self, service_number: int) -> None:
-		self.data = service_number.to_bytes(2, 'little') # @todo not sure about LSB here
+	def init (self, service_number: int) -> None:
+		self.data = service_number.to_bytes(2, 'little')
 
 class ActionService(CcpCommand):
 	'''
@@ -442,8 +454,8 @@ class ActionService(CcpCommand):
 	'''
 	code = 0x21 
 
-	def __init__ (self, service_number: int, parameters: bytes = bytes()) -> None:
-		self.data = service_number.to_bytes(2, 'little') + parameters # @todo not sure about LSB here
+	def init (self, service_number: int, parameters: bytes = bytes()) -> None:
+		self.data = service_number.to_bytes(2, 'little') + parameters
 
 class TestAvailability(CcpCommand):
 	'''
@@ -459,7 +471,7 @@ class TestAvailability(CcpCommand):
 	'''
 	code = 0x05
 
-	def __init__ (self, station_address: int) -> None:
+	def init (self, station_address: int) -> None:
 		self.data = station_address.to_bytes(2, 'little')
 
 class StartStopSynchronisedDataTransmission(CcpCommand):
@@ -476,7 +488,7 @@ class StartStopSynchronisedDataTransmission(CcpCommand):
 	'''
 	code = 0x08
 
-	def __init__ (self, request: DataTransmissionRequest) -> None:
+	def init (self, request: DataTransmissionRequest) -> None:
 		self.data = request.value.to_bytes(1, 'little')
 
 class GetCurrentlyActiveCalibrationPage(CcpCommand):
@@ -501,5 +513,5 @@ class GetImplementedVersionOfCcp(CcpCommand):
 	'''
 	code = 0x1B
 
-	def __init__ (self, main_protocol_version: int, release_protocol_version: int) -> None:
+	def init (self, main_protocol_version: int, release_protocol_version: int) -> None:
 		self.data = bytes([main_protocol_version, release_protocol_version])

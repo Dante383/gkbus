@@ -12,8 +12,7 @@ sys.path.insert(0, parentdir)
 
 import logging, argparse
 from dataclasses import dataclass
-from ctypes import LittleEndianStructure, c_uint8
-from gkbus.hardware import CanHardware, TimeoutException
+from gkbus.hardware import CanHardware, CanFilter, TimeoutException
 from gkbus.transport import CcpOverCanTransport, TransportABC, RawPacket, PacketDirection
 from gkbus.protocol import ccp
 
@@ -37,19 +36,6 @@ class DaqEntry:
 
 	def __repr__ (self) -> str:
 		return self.__str__()
-
-class SessionStatusBitfield(LittleEndianStructure):
-	_pack_ = 1
-	_fields_ = [ # res - reserved
-		('CAL', c_uint8, 1),
-		('DAQ', c_uint8, 1),
-		('RESUME', c_uint8, 1),
-		('res', c_uint8, 1),
-		('res1', c_uint8, 1),
-		('res2', c_uint8, 1),
-		('STORE', c_uint8, 1),
-		('RUN', c_uint8, 1),
-	]
 
 def packet2hex (packet: RawPacket) -> str:
 	direction = 'Incoming' if packet.direction == PacketDirection.INCOMING else 'Outgoing'
@@ -78,8 +64,8 @@ def main():
 	print('\nConnecting to station 0x01')
 	ccp_client.execute(ccp.commands.Connect(station_address=0x01))
 
-	print('\nFetching security seed with resource mask 0x02 (DAQ)')
-	ccp_client.execute(ccp.commands.GetSeedForKey(resource_mask=0x02))
+	print('\nFetching security seed with resource mask DAQ=1')
+	ccp_client.execute(ccp.commands.GetSeedForKey(resource_mask=ccp.types.ResourceMaskBitfield(DAQ=1)))
 	
 	print('\nSending security key (UnlockProtection)')
 	ccp_client.execute(ccp.commands.UnlockProtection(key=b'\x44\x45\x45\x54\xC0\x35'))
@@ -142,7 +128,7 @@ def main():
 	print('\nSwitching CCP session status to DAQ=1, STORE=1')
 	ccp_client.execute(ccp.commands.SetSessionStatus(
 		int.from_bytes(
-			SessionStatusBitfield(DAQ=1, STORE=1),
+			ccp.types.SessionStatusBitfield(DAQ=1, STORE=1),
 			'little'
 		)
 	))
@@ -153,13 +139,12 @@ def main():
 	
 	# this is a really dirty way of doing that, using private properties 
 	# that might change at any time. not recommended. @todo add proper filter api to CAN hardware
-	hardware.filters = [{'can_id': CAN_RX_ID, 'can_mask': 0x7ff}]
-	daq_filters = []
+	can_filters = [CanFilter(can_id=CAN_RX_ID, can_mask=0x7ff)]
 	print('\nActive DAQ entries:')
 	for entry in daq_entries:
-		daq_filters.append({'can_id': entry.assigned_can_id, 'can_mask': 0x7ff})
+		can_filters.append(CanFilter(can_id=entry.assigned_can_id, can_mask=0x7ff))
 		print(entry)
-	hardware.filters += daq_filters
+	hardware.set_filters(can_filters)
 	transport.init()
 
 	print('\nFetching DAQ entries value until CTRL+C')
@@ -171,7 +156,7 @@ def main():
 
 	try:
 		while True:
-			frame = hardware._read_with_software_filters(daq_filters)
+			frame = hardware.read(length=8)
 			entry_values[frame.identifier] = frame.data
 			
 			formatted = ''

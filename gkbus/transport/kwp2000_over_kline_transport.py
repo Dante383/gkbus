@@ -1,6 +1,6 @@
 import struct, time, logging
 from .transport_abc import TransportABC, RawPacket, PacketDirection
-from ..hardware.hardware_abc import HardwareABC
+from ..hardware.hardware_abc import HardwareABC, RawFrame
 
 logger = logging.getLogger(__name__)
 
@@ -43,7 +43,7 @@ class Kwp2000OverKLineTransport (TransportABC):
 
 	def _write (self, data: bytes) -> int:
 		logger.debug('K-Line sending: {}'.format(' '.join([hex(x) for x in list(data)])))
-		return self.hardware.write(data)
+		return self.hardware.write(RawFrame(identifier=0, data=data))
 
 	def _read (self, length: int) -> bytes:
 		logger.debug('K-Line trying to read {} bytes'.format(length))
