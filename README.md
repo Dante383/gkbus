@@ -32,8 +32,9 @@ print(response)
 
 ## Supported protocols
 
-Kwp2000 (ISO14230) - over CAN and K-Line
-CCP (Can Calibration Protocol)
+- Kwp2000 (ISO14230) - over CAN and K-Line
+
+- CCP (Can Calibration Protocol)
 
 ## Installing 
 
