@@ -16,7 +16,7 @@ extensions = [
 	'sphinx.ext.intersphinx',
 	'sphinx.ext.todo',
 	'sphinx.ext.viewcode',
-    #'sphinx.ext.autosummary',
+    'sphinx.ext.autosummary',
 ]
 
 #intersphinx_disabled_domains = ['std']
