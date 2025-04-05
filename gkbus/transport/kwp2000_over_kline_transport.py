@@ -47,11 +47,16 @@ class Kwp2000OverKLineTransport (TransportABC):
 
 	def _read (self, length: int) -> bytes:
 		logger.debug('K-Line trying to read {} bytes'.format(length))
-		data = self.hardware.read(length)
+		data = self.hardware.read(length).data
 		logger.debug('K-Line success: {}'.format(' '.join([hex(x) for x in list(data)])))
 		return data
 
 	def init (self, payload: bytes) -> tuple[bytes, int, int]:
+		'''
+		Bring up the socket if not opened already and initialize the K-Line by ISO14230. 
+		'''
+		if not self.hardware.port_opened:
+			self.hardware.open()
 		return self.hardware.iso14230_fast_init(self.build_payload(payload))
 
 	def calculate_checksum (self, payload: bytes) -> int:

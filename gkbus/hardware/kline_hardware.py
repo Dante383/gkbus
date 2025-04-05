@@ -2,7 +2,7 @@ import serial
 import serial.tools.list_ports
 import os, time, logging
 from typing_extensions import Self
-from .hardware_abc import HardwareABC, HardwarePort, OpeningPortException, TimeoutException
+from .hardware_abc import HardwareABC, HardwarePort, RawFrame, OpeningPortException, TimeoutException
 
 logger = logging.getLogger(__name__)
 
@@ -14,10 +14,12 @@ class KLineHardware(HardwareABC):
 	def __init__ (self, port: str, baudrate: int = 10400, timeout: float = 2) -> None:
 		self.port, self.baudrate = port, baudrate
 		self.timeout = timeout
+		self.port_opened = False
 
 	def open (self) -> bool:
 		try:
 			self.socket = serial.Serial(self.port, self.baudrate, timeout=self.timeout)
+			self.port_opened = True
 		except serial.serialutil.SerialException as e:
 			raise OpeningPortException(e)
 		
@@ -26,12 +28,13 @@ class KLineHardware(HardwareABC):
 
 		return True
 	
-	def read (self, length: int) -> bytes:
+	def read (self, length: int) -> RawFrame:
 		message = self.socket.read(length)
 
 		if (len(message) < length):
 			raise TimeoutException
-		return message
+
+		return RawFrame(identifier=False, data=message)
 
 	def write (self, data: bytes) -> int:
 		# @todo - this timeout is needed for now, otherwise 
@@ -57,6 +60,7 @@ class KLineHardware(HardwareABC):
 		try:
 			self.socket.break_condition = False
 			self.socket.close()
+			self.port_opened = False
 		except AttributeError:
 			pass
 

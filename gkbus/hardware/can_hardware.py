@@ -1,6 +1,7 @@
-import os, math
+import os, math, time
 from sys import platform
 from typing_extensions import Self
+from typing import Union
 from scapy.config import conf
 if platform.startswith('win32'):
 	conf.contribs['CANSocket'] = {'use-python-can': True}
@@ -9,19 +10,24 @@ else:
 	from scapy.contrib.cansocket import CANSocket
 from scapy.layers.can import CAN, CAN_MTU, CAN_MAX_DLEN
 from scapy.error import Scapy_Exception
-from .hardware_abc import HardwareABC, HardwarePort, OpeningPortException, SendingException, TimeoutException
+from .hardware_abc import HardwareABC, HardwarePort, RawFrame, OpeningPortException, SendingException, TimeoutException
 
 CAN_HEADER_LEN = CAN_MTU-CAN_MAX_DLEN
 
 class CanHardware(HardwareABC):
 	'''
 	Hardware class for CAN Bus interfaces. Uses Scapy as a backend
+
+	:param filters: list of dictionaries containing hardware CAN filters.
+		Keys: can_id, can_mask
 	'''
 
 	def __init__ (self, port: str, tx_id: int = None, rx_id: int = None, timeout: int = 1) -> None:
 		self.port = port
 		self.tx_id, self.rx_id = tx_id, rx_id
 		self.timeout = timeout
+		self.port_opened = False
+		self.filters = self._build_filters()
 
 	def _build_filters (self) -> list[dict]:
 		filters = []
@@ -34,19 +40,23 @@ class CanHardware(HardwareABC):
 		return filters
 
 	def open (self) -> bool:
+		if not self.filters and self.rx_id != None: # dirty bypass, @todo: properly implement filters
+			self.filters = self._build_filters()
+
 		try:
-			self.socket = CANSocket(channel=self.port, can_filters=self._build_filters())
+			self.socket = CANSocket(channel=self.port, can_filters=self.filters)
+			self.port_opened = True
 		except (OSError, Scapy_Exception) as e:
 			raise OpeningPortException(e)
 		return True
 
-	def read (self, length: int) -> bytes:
+	def read (self, length: int) -> RawFrame:
 		try:
 			packet = self.socket.sniff(timeout=self.timeout, count=1)[0]
 		except IndexError:
 			raise TimeoutException
 
-		return packet.data
+		return RawFrame(identifier=packet.identifier, data=packet.data)
 
 	def write (self, data: bytes, tx_id: int = None) -> int:
 		tx_id = tx_id if tx_id != None else self.tx_id
@@ -59,13 +69,31 @@ class CanHardware(HardwareABC):
 
 		return bytes_written-CAN_HEADER_LEN
 
+	def _read_with_software_filters (self, filters: list, timeout: float = 10.0) -> RawFrame:
+		'''
+		This should not be used and will be removed soon
+		'''
+		time_started = time.time()
+
+		while True:
+			packet = self.socket.recv()
+			can_id = packet.identifier
+
+			for can_filter in filters:
+				if (can_id & can_filter['can_mask']) == (can_filter['can_id'] & can_filter['can_mask']):
+					return RawFrame(identifier=packet.identifier, data=packet.data)
+
+			if (time.time()-time_started) > timeout:
+				raise TimeoutException
+
 	def close (self) -> None:
 		self.socket.close()
-
-	def get_baudrate (self) -> int:
-		raise NotImplementedError
+		self.port_opened = False
 
 	def set_baudrate (self, baudrate: int) -> Self:
+		raise NotImplementedError
+
+	def get_baudrate (self) -> int:
 		raise NotImplementedError
 
 	def set_timeout (self, timeout: float) -> Self:
