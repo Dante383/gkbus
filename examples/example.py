@@ -1,9 +1,10 @@
-#from gkbus.interface import CanInterface, KLineInterface
+import os, sys, inspect
 
-from gkbus.kwp.commands import *
-from gkbus.kwp.enums import *
+# dirty hack to import gkbus from this package's source code, not the installed package
+currentdir = os.path.dirname(os.path.abspath(inspect.getfile(inspect.currentframe())))
+parentdir = os.path.dirname(currentdir)
+sys.path.insert(0, parentdir) 
 
-#refactor
 from gkbus.hardware import KLineHardware, CanHardware
 from gkbus.transport import Kwp2000OverKLineTransport, Kwp2000OverCanTransport
 from gkbus.protocol import kwp2000
@@ -45,7 +46,7 @@ def main():
 	print(response.get_data())
 
 	print('starting flash reprogramming diagnostic session')
-	response = kwp.execute(kwp2000.commands.StartDiagnosticSession(DiagnosticSession.FLASH_REPROGRAMMING))
+	response = kwp.execute(kwp2000.commands.StartDiagnosticSession(kwp2000.enums.DiagnosticSession.FLASH_REPROGRAMMING))
 	print(response)
 
 	print('dumping the buffer')

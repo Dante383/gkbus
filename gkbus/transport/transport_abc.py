@@ -46,9 +46,27 @@ class TransportABC(ABC):
 	buffer: list[RawPacket] = [] # is this shared between all transports? @todo critical
 	buffer_size: int = 20
 
-	def __init__ (self, hardware: HardwareABC) -> None:
+	def __init__ (self, hardware: HardwareABC, tx_id: int = None, rx_id: int = None) -> None:
+		'''
+		TransportABC constructor
+
+		:param hardware: HardwareABC instance
+		:param tx_id: Default identifier to transmit on - optional, hardware specific
+		:param rx_id: Default identifier to listen for - optional, hardware specific. 
+			For CAN based transports, this will be set as filter in the interface
+		'''
 		self.hardware = hardware
+		self.tx_id, self.rx_id = tx_id, rx_id
 		self.buffer = []
+
+	def init (self) -> bool:
+		'''
+		Get ready to transfer: initialize the underlaying hardware if not initialized already
+		Calling this method is not required - it's just a helper to avoid manual hardware initialization
+		'''
+		if not self.hardware.port_opened:
+			return self.hardware.open()
+		return True
 
 	def send_pdu (self, data: bytes) -> int:
 		'''
@@ -68,6 +86,29 @@ class TransportABC(ABC):
 		'''
 		self.send_pdu(data)
 		return self.read_pdu()
+
+	def set_tx_id (self, tx_id: int) -> Self:
+		'''
+		Set default identifier to transmit on - hardware specific
+
+		:param tx_id: Identifier to transmit on
+		'''
+		self.hardware.set_tx_id(tx_id)
+		self.tx_id = tx_id
+
+	def get_tx_id (self) -> int:
+		'''
+		Get default identifier to transmit on
+		'''
+		return self.tx_id
+
+	def get_rx_id (self, rx_id: int) -> int:
+		'''
+		Get current identifier to listen for. Depending on the hardware,
+		a hardware filter should be created with this identifier,
+		meaning no other messages will be received or processed
+		'''
+		return self.rx_id
 
 	def set_buffer_size (self, buffer_size: int) -> Self:
 		'''

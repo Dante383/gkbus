@@ -34,24 +34,26 @@ class Kwp2000RequestFrame:
 
 class Kwp2000Protocol (ProtocolABC):
 	def open (self) -> bool:
-		return self.transport.hardware.open()
+		return self.transport.init()
 
 	def init (self, init_command: Kwp2000Command, keepalive_command: Kwp2000Command = None, keepalive_delay: float = 1.5) -> bool:
-		if not isinstance(self.transport, Kwp2000OverKLineTransport):
-			return True
+		if not self.transport.hardware.is_open():
+			self.transport.hardware.open()
+			
+		if isinstance(self.transport, Kwp2000OverKLineTransport):
+			init_payload = Kwp2000RequestFrame(init_command.get_service_identifier(), init_command.get_data(as_list=False))
 
-		init_payload = Kwp2000RequestFrame(init_command.get_service_identifier(), init_command.get_data(as_list=False))
+			try:
+				self.transport.hardware.set_timeout(0.4)
+				(response, time_low, time_high) = self.transport.init(init_payload.to_pdu())
+				logger.debug('K-Line FastInit: success: {}, time low: {}, time high: {}'.format(response, time_low, time_high))
+				self.transport.read_pdu()
+				self.transport.hardware.set_timeout(2)
+			except TimeoutException:
+				logger.warning('K-Line fast init failed')
 
-		try:
-			self.transport.hardware.set_timeout(0.4)
-			(response, time_low, time_high) = self.transport.init(init_payload.to_pdu())
-			logger.debug('K-Line FastInit: success: {}, time low: {}, time high: {}'.format(response, time_low, time_high))
-			self.transport.read_pdu()
 			self.transport.hardware.set_timeout(2)
-		except TimeoutException:
-			logger.warning('K-Line fast init failed')
 
-		self.transport.hardware.set_timeout(2)
 		self._execute_lock = threading.Lock()
 
 		if keepalive_command:

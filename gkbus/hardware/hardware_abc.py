@@ -18,6 +18,11 @@ class TimeoutException(ReadingException):
 	pass
 
 @dataclass
+class RawFrame:
+	identifier: int
+	data: bytes
+
+@dataclass
 class HardwarePort:
 	port: str
 	port_name: str # for /dev/ttyUSB0, this would be ttyUSB0
@@ -31,6 +36,9 @@ class HardwarePort:
 		)
 
 class HardwareABC(ABC):
+	'''
+	Abstract hardware class
+	'''
 	def __init__ (self, port: str, *args) -> None:
 		'''
 		Create a new hardware instance, assign arguments. No logic is executed here
@@ -39,6 +47,7 @@ class HardwareABC(ABC):
 		:return:
 		'''
 		self.port = port
+		self.port_opened = False
 
 	def open (self) -> bool:
 		'''
@@ -48,6 +57,14 @@ class HardwareABC(ABC):
 		:rtype: bool
 		'''
 		pass
+
+	def is_open (self) -> bool:
+		'''
+		Check whether the hardware socket is open
+
+		:return: a boolean indicating whether the hardware socket/port is opened 
+		'''
+		return self.port_opened
 
 	def read (self, length: int) -> bytes:
 		'''
@@ -77,6 +94,28 @@ class HardwareABC(ABC):
 		:rtype: bool
 		'''
 		pass
+
+	def set_tx_id (self, tx_id: int) -> Self:
+		'''
+		Set default identifier to transmit on - hardware specific
+
+		:param tx_id: Identifier to transmit on
+		'''
+		self.tx_id = tx_id
+
+	def get_tx_id (self) -> int:
+		'''
+		Get default identifier to transmit on
+		'''
+		return self.tx_id
+
+	def get_rx_id (self) -> int:
+		'''
+		Get current identifier to listen for. Depending on the hardware,
+		a hardware filter should be created with this identifier,
+		meaning no other messages will be received or processed
+		'''
+		return self.rx_id
 
 	def set_baudrate (self, baudrate: int) -> Self:
 		'''

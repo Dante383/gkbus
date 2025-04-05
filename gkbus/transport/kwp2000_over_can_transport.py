@@ -14,7 +14,14 @@ class Kwp2000OverCanTransport (TransportABC):
 	def __init__ (self, hardware: HardwareABC, tx_id: hex, rx_id: hex) -> None:
 		self.hardware = hardware
 		self.tx_id, self.rx_id = tx_id, rx_id
-		self.isotp = ISOTPSocket(self.hardware.socket, tx_id, rx_id, padding=True)
+		self.isotp = None # ISOTPSocket(self.hardware.socket, tx_id, rx_id, padding=True)
+
+	def init (self) -> bool:
+		if not self.hardware.port_opened:
+			self.hardware.open()
+
+		if not self.isotp:
+			self.isotp = ISOTPSocket(self.hardware.socket, self.tx_id, self.rx_id, padding=True)
 		
 	def send_pdu (self, pdu: bytes) -> int:
 		data = pdu
@@ -38,6 +45,10 @@ class Kwp2000OverCanTransport (TransportABC):
 	def send_read_pdu (self, data: bytes) -> bytes:
 		self.buffer_push(RawPacket(direction=PacketDirection.OUTGOING, data=data, timestamp=int(time.time()*1000)))
 		response = self.isotp.sr1(ISOTP(bytes(data)), verbose=False)
+
+		if not response:
+			raise TimeoutException
+			
 		self.buffer_push(RawPacket(direction=PacketDirection.INCOMING, data=response.data, timestamp=int(time.time() * 1000)))
 
 		return response.data

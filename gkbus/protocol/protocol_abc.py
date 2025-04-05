@@ -1,4 +1,5 @@
 from abc import ABC
+from typing_extensions import Self
 from ..transport.transport_abc import TransportABC
 
 class ProtocolABC (ABC):
@@ -17,5 +18,15 @@ class ProtocolABC (ABC):
 		'''
 		pass
 
+	def set_transport (self, transport: TransportABC) -> Self:
+		'''
+		Replace transport used by the protocol instance. 
+		Remember to close the previous socket first, 
+		this won't happen automatically
+
+		:param transport: Transport instance to replace current one with
+		'''
+		self.transport = transport
+		
 	def __del__ (self) -> None:
 		self.close()
