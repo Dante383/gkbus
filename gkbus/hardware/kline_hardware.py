@@ -24,6 +24,7 @@ class KLineHardware(HardwareABC):
 		self.port, self.baudrate = port, baudrate
 		self.timeout = timeout
 		self.port_opened = False
+		self.socket: serial.Serial = None
 
 	def open (self) -> bool:
 		try:

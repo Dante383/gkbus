@@ -88,36 +88,11 @@ class HardwareABC(ABC):
 		'''
 		pass
 
-	def close (self) -> bool:
+	def close (self) -> None:
 		'''
 		Close the port
-
-		:return: boolean indicating whether the port was successfully closed
-		:rtype: bool
 		'''
 		pass
-
-	def set_tx_id (self, tx_id: int) -> Self:
-		'''
-		Set default identifier to transmit on - hardware specific
-
-		:param tx_id: Identifier to transmit on
-		'''
-		self.tx_id = tx_id
-
-	def get_tx_id (self) -> int:
-		'''
-		Get default identifier to transmit on
-		'''
-		return self.tx_id
-
-	def get_rx_id (self) -> int:
-		'''
-		Get current identifier to listen for. Depending on the hardware,
-		a hardware filter should be created with this identifier,
-		meaning no other messages will be received or processed
-		'''
-		return self.rx_id
 
 	def set_baudrate (self, baudrate: int) -> Self:
 		'''

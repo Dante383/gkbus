@@ -4,15 +4,15 @@ from typing_extensions import Self
 class CcpCommand:
 	code = 0x0
 
-	def __init__ (self, *args, **kwargs) -> None:
+	def __init__ (self, *args: tuple[bytes], **kwargs: dict) -> None:
 		self.parameters: dict = dict(enumerate(args)) | kwargs
 		self.init(*args, **kwargs)
 
-	def init (self, *args, **kwargs):
+	def init (self, *args: tuple[bytes], **kwargs: dict) -> None:
 		if len(args) == 0:
-			self.data = bytes()
+			self.data: bytes = bytes()
 		else:
-			self.data = args[0]
+			self.data: bytes = args[0]
 			
 	def set_data (self, data: bytes = bytes()) -> Self:
 		self.data = data

@@ -7,7 +7,7 @@ if platform.startswith('win32'):
 	conf.contribs['ISOTP'] = {'use-can-isotp-kernel-module': False}
 else:
 	conf.contribs['ISOTP'] = {'use-can-isotp-kernel-module': True}
-from scapy.contrib.isotp import *
+from scapy.contrib.isotp import ISOTP, ISOTPSocket
 
 from ..hardware.can_hardware import CanFilter
 from ..hardware.hardware_abc import HardwareABC, TimeoutException
@@ -15,10 +15,10 @@ from .transport_abc import PacketDirection, RawPacket, TransportABC
 
 
 class Kwp2000OverCanTransport (TransportABC):
-	def __init__ (self, hardware: HardwareABC, tx_id: hex, rx_id: hex) -> None:
+	def __init__ (self, hardware: HardwareABC, tx_id: int, rx_id: int) -> None:
 		self.hardware = hardware
 		self.tx_id, self.rx_id = tx_id, rx_id
-		self.isotp = None
+		self.isotp: ISOTPSocket | None = None
 
 	def init (self) -> bool:
 		self.hardware.set_filters([CanFilter(can_id=self.rx_id, can_mask=0x7ff)])
@@ -28,6 +28,8 @@ class Kwp2000OverCanTransport (TransportABC):
 
 		if not self.isotp:
 			self.isotp = ISOTPSocket(self.hardware.socket, self.tx_id, self.rx_id, padding=True)
+
+		return True
 		
 	def send_pdu (self, pdu: bytes) -> int:
 		data = pdu

@@ -7,8 +7,8 @@ from .transport_abc import PacketDirection, RawPacket, TransportABC
 logger = logging.getLogger(__name__)
 
 class Kwp2000OverKLineTransport (TransportABC):
-	def __init__ (self, hardware: HardwareABC, tx_id: hex, rx_id: hex) -> None:
-		self.hardware = hardware
+	def __init__ (self, hardware: HardwareABC, tx_id: int, rx_id: int) -> None:
+		self.hardware: HardwareABC = hardware
 		self.tx_id, self.rx_id = tx_id, rx_id
 
 	def send_pdu (self, pdu: bytes) -> int:

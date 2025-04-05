@@ -49,12 +49,10 @@ class GetSeedForKey(CcpCommand):
 
 	def init (self, resource_mask: Union[int, ResourceMaskBitfield]) -> None:
 		if isinstance(resource_mask, ResourceMaskBitfield):
-			resource_mask = bytes(resource_mask)
+			self.data = bytes(resource_mask)
 		else:
-			resource_mask = resource_mask.to_bytes(1, 'little')
+			self.data = resource_mask.to_bytes(1, 'little')
 		
-		self.data = resource_mask
-
 class UnlockProtection(CcpCommand):
 	'''
 	Copied placeholder, to be translated from ISO to human:

@@ -4,11 +4,11 @@ from typing_extensions import Self
 class Kwp2000Command:
 	service_identifier: int = 0x0
 
-	def __init__ (self, *args, **kwargs) -> None:
+	def __init__ (self, *args: tuple[bytes], **kwargs: dict) -> None:
 		self.parameters: dict = dict(enumerate(args)) | kwargs
 		self.init(*args, **kwargs)
 
-	def init (self, *args, **kwargs) -> None:
+	def init (self, *args: tuple[bytes], **kwargs: dict) -> None:
 		if len(args) == 0:
 			self.data = bytes()
 		else:

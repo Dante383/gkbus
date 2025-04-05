@@ -13,7 +13,7 @@ class Kwp2000ResponseFrame:
 	data: bytes
 
 	def __repr__ (self) -> str:
-		return 'Kwp2000ResponseFrame(status={}, data={})'.format(hex(self.status), self.data)
+		return 'Kwp2000ResponseFrame(status={}, data={!r})'.format(hex(self.status), self.data)
 
 @dataclass
 class Kwp2000Response:

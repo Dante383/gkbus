@@ -2,7 +2,6 @@ import logging
 import threading
 import time
 from dataclasses import dataclass
-from typing import Union
 
 from ...hardware import TimeoutException
 from ...transport import Kwp2000OverKLineTransport
@@ -40,7 +39,7 @@ class Kwp2000Protocol (ProtocolABC):
 			return self.transport.hardware.open()
 		return True
 
-	def init (self, init_command: Kwp2000Command, keepalive_command: Kwp2000Command = None, keepalive_delay: float = 1.5) -> bool:
+	def init (self, init_command: Kwp2000Command, keepalive_command: Kwp2000Command | None = None, keepalive_delay: float = 1.5) -> bool:
 		if isinstance(self.transport, Kwp2000OverKLineTransport):
 			self.open()
 			
@@ -49,7 +48,7 @@ class Kwp2000Protocol (ProtocolABC):
 			try:
 				self.transport.hardware.set_timeout(0.4)
 				(response, time_low, time_high) = self.transport.init(init_payload.to_pdu())
-				logger.debug('K-Line FastInit: success: {}, time low: {}, time high: {}'.format(response, time_low, time_high))
+				logger.debug('K-Line FastInit: success: {!r}, time low: {}, time high: {}'.format(response, time_low, time_high))
 				self.transport.read_pdu()
 				self.transport.hardware.set_timeout(2)
 			except TimeoutException:
@@ -85,7 +84,7 @@ class Kwp2000Protocol (ProtocolABC):
 
 		return response
 
-	def handle_errors (self, response: Kwp2000Response) -> Union[None, Kwp2000Response]:
+	def handle_errors (self, response: Kwp2000Response) -> Kwp2000Response:
 		if response.success():
 			return response
 
@@ -98,7 +97,7 @@ class Kwp2000Protocol (ProtocolABC):
 
 		raise Kwp2000NegativeResponseException(Kwp2000NegativeStatus(identifier=response.frame.data[1]))
 
-	def _keepalive (self):
+	def _keepalive (self) -> None:
 		'''
 		Send the keepalive command if keepalive_delay seconds elapsed since the last transmitted frame
 		'''
@@ -114,7 +113,7 @@ class Kwp2000Protocol (ProtocolABC):
 		except KeyboardInterrupt:
 			pass
 
-	def _start_keepalive (self):
+	def _start_keepalive (self) -> None:
 		'''
 		Start the keep-alive thread
 		'''
@@ -122,7 +121,7 @@ class Kwp2000Protocol (ProtocolABC):
 		self._keepalive_thread = threading.Thread(target=self._keepalive)
 		self._keepalive_thread.start()
 
-	def _stop_keepalive (self):
+	def _stop_keepalive (self) -> None:
 		if hasattr(self, '_keepalive_event'):
 			self._keepalive_event.set()
 		if hasattr(self, '_keepalive_thread'):

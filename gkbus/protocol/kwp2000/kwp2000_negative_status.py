@@ -124,15 +124,15 @@ class Kwp2000NegativeStatus:
 	name: str = '' 
 	message: str = ''
 
-	def __init__ (self, identifier):
+	def __init__ (self, identifier: int) -> None:
 		self.identifier = identifier
 		try:
-			self.name = Kwp2000NegativeStatusIdentifierEnum(self.identifier)
+			self.name = Kwp2000NegativeStatusIdentifierEnum(self.identifier).name
 		except ValueError:
 			return
 
 		try:
-			self.message = Kwp2000NegativeStatusMessageEnum[self.name.name].value
+			self.message = Kwp2000NegativeStatusMessageEnum[self.name].value
 		except KeyError:
 			self.message = 'Unknown'
 

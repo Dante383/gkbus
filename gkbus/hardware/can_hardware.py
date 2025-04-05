@@ -37,7 +37,7 @@ class CanHardware(HardwareABC):
 		Keys: can_id, can_mask
 	'''
 
-	def __init__ (self, port: str, timeout: int = 1, filters: list[CanFilter] = None) -> None:
+	def __init__ (self, port: str, timeout: int = 1, filters: list[CanFilter] | None = None) -> None:
 		self.port: str = port
 		self.timeout: float = timeout
 		self.port_opened: bool = False
@@ -109,12 +109,12 @@ class CanHardware(HardwareABC):
 		self.close()
 		self.open()
 
-	def add_filter (self, filter: CanFilter) -> Self:
+	def add_filter (self, can_filter: CanFilter) -> Self:
 		'''
 		Add new hardware canbus id filter
 		This will trigger a restart of the socket
 		'''
-		self.set_filters(self.get_filters() + filter)
+		self.set_filters(self.get_filters() + can_filter)
 
 	def close (self) -> None:
 		if hasattr(self, 'socket'):
@@ -140,7 +140,7 @@ class CanHardware(HardwareABC):
 		:return: a list containing interface identifiers (can0, vcan0, ...)
 		'''
 		NET_DIR = '/sys/class/net'
-		interfaces = []
+		interfaces: list[str] = []
 
 		if not os.path.exists(NET_DIR):
 			return interfaces

@@ -30,7 +30,7 @@ class RawPacket:
 
 	def __str__ (self) -> str:
 		direction = 'Incoming' if self.direction == PacketDirection.INCOMING else 'Outgoing'
-		return 'RawPacket({}, ts={}, data={})'.format(direction, self.timestamp, self.data)
+		return 'RawPacket({}, ts={}, data={!r})'.format(direction, self.timestamp, self.data)
 
 	def __repr__ (self) -> str:
 		return self.__str__()

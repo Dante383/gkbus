@@ -12,7 +12,7 @@ class CcpOverCanTransport (TransportABC):
 	chunks of data into messages - each command or response must fit within 8 bytes of
 	a standard CAN frame
 	'''
-	def __init__ (self, hardware: HardwareABC, tx_id: hex, rx_id: hex) -> None:
+	def __init__ (self, hardware: HardwareABC, tx_id: int, rx_id: int) -> None:
 		self.hardware = hardware
 		self.tx_id, self.rx_id = tx_id, rx_id
 		self.hardware.set_filters([CanFilter(can_id=self.rx_id, can_mask=0x7ff)])
