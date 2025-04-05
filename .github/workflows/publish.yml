@@ -14,13 +14,14 @@ jobs:
     steps:
       - name: Checkout
         uses: actions/checkout@v1
+        with:
+          fetch_depth: 1
 
       - name: Get Build Version
         run: |
             buildversion="0.2.${GITHUB_RUN_NUMBER}"
             echo "Build Number: $buildversion"
             echo "version=$buildversion" >> $GITHUB_ENV
-            fetch-depth=1
 
       - name: Install Python
         uses: actions/setup-python@v1
