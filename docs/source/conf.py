@@ -13,6 +13,7 @@ extensions = [
 #    'sphinx.ext.duration',
  #   'sphinx.ext.doctest',
     'sphinx.ext.autodoc',
+    'sphinx.ext.napoleon',
 	'sphinx.ext.intersphinx',
 	'sphinx.ext.todo',
 	'sphinx.ext.viewcode',
@@ -34,7 +35,7 @@ version = __version__
 
 language = 'en'
 
-#pygments_style = 'flask_theme_support.FlaskyStyle'
+pygments_style = 'sphinx'
 
 autosummary_generate = True
 
