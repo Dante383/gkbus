@@ -49,7 +49,7 @@ class TransportABC(ABC):
 	buffer: list[RawPacket] = [] # is this shared between all transports? @todo critical
 	buffer_size: int = 20
 
-	def __init__ (self, hardware: HardwareABC, tx_id: int = None, rx_id: int = None) -> None:
+	def __init__ (self, hardware: HardwareABC, tx_id: int | None = None, rx_id: int | None = None) -> None:
 		'''
 		TransportABC constructor
 

@@ -15,7 +15,7 @@ from gkbus.protocol import kwp2000
 from gkbus.transport import Kwp2000OverKLineTransport
 
 
-def main():
+def main() -> None:
 	print('available KLineHardware ports')
 	ports = KLineHardware.available_ports()
 	for port in ports:
@@ -48,7 +48,11 @@ def main():
 	print(response.get_data())
 
 	print('starting flash reprogramming diagnostic session')
-	response = kwp.execute(kwp2000.commands.StartDiagnosticSession(kwp2000.enums.DiagnosticSession.FLASH_REPROGRAMMING))
+	response = kwp.execute(
+		kwp2000.commands.StartDiagnosticSession(
+			kwp2000.enums.DiagnosticSession.FLASH_REPROGRAMMING
+			)
+		)
 	print(response)
 
 	print('dumping the buffer')

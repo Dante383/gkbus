@@ -34,7 +34,7 @@ def test_availability (ccp_client: ccp.CcpProtocol, station_id: int) -> bool:
 		print('timeout')
 	return False
 		
-def main(args):
+def main(args) -> None:
 	print('Available CanHardware ports:')
 	can_ports = CanHardware.available_ports()
 	for port in can_ports:

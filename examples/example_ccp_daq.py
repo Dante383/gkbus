@@ -52,7 +52,7 @@ def dump_buffer (transport: TransportABC) -> None:
 	packets = transport.buffer_dump()
 	print('\n'.join([packet2hex(x) for x in packets]))
 
-def main():
+def main() -> None:
 	print('Available CanHardware ports:')
 	can_ports = CanHardware.available_ports()
 	for port in can_ports:
