@@ -4,7 +4,7 @@ build-backend = "flit_core.buildapi"
 
 [project]
 name = "gkbus"
-version = "0.4.6"
+version = "0.4.7"
 readme = "README.md"
 authors = [{name = "Dante", email = "dante383@protonmail.com"}]
 dynamic = ["description"]

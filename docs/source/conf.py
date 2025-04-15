@@ -1,9 +1,10 @@
 import os
 import sys
+from os.path import abspath, join, dirname, normpath
 
-sys.path.insert(0, os.path.abspath('..')) #/../gkbus/'))
+sys.path.insert(0, normpath(abspath(join(dirname(__file__), '..', '..'))))
 
-from gkbus import __version__
+import gkbus
 
 # Configuration file for the Sphinx documentation builder.
 
@@ -30,8 +31,8 @@ project = 'gkbus'
 copyright = '2025, Dante'
 author = 'Dante'
 
-release = __version__
-version = __version__
+release = gkbus.__version__
+version = gkbus.__version__
 
 language = 'en'
 

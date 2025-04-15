@@ -1,4 +1,2 @@
 sphinx
 sphinx-rtd-theme
-typing_extensions
-gkbus

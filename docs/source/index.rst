@@ -1,9 +1,7 @@
 GKBus
 ===================================
 
-High-level KWP over K-Line/CANbus library powering the GKFlasher
-
-Automotive diagnostic protocols library powering the [GKFlasher](https://github.com/dante383/GKFlasher)
+Automotive diagnostic protocols library powering the `GKFlasher <https://github.com/dante383/GKFlasher>`_
 
 .. code-block:: python
     :linenos:
@@ -41,7 +39,21 @@ Supported protocols
 
 - Kwp2000 (ISO14230) - over CAN and K-Line
 
-- CCP (Can Calibration Protocol)
+- CCP (Can Calibration Protocol) - over CAN
+
+Supported hardware
+====================
+
+.. list-table::
+    :widths: 30, 70
+    :header-rows: 1
+
+    * - Physical layer
+      - Supported hardware
+    * - K-Line (ISO 9141-2/14230-1)
+      - Basically any native serial port. Genuine FTDI adapters work best, knockoff FTDI and CH340 are also tested
+    * - CAN bus
+      - On Linux, anything that shows up as a native CAN network interface. Kernel ISO-TP module is used when available. On Windows, while everything supported by python-can should work, it was not tested. 
 
 Installing 
 ===========
