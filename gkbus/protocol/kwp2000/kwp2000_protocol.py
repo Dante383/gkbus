@@ -104,6 +104,12 @@ class Kwp2000Protocol (ProtocolABC):
 		try:
 			while not self._keepalive_event.is_set():
 				time.sleep(1)
+				if not self.transport.hardware.is_open(): 
+					# this is solving a problem introduced by time.sleep 
+					# being at the beginning of the loop instead of the end
+					# time.sleep at the beginning is solving another problem
+					# i dont remember what problem.
+					break
 				elapsed_time = time.time() - self._last_execution_time if self._last_execution_time else float('inf')
 				if elapsed_time >= self.keepalive_delay:
 					try:

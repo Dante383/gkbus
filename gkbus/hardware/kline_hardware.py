@@ -68,12 +68,16 @@ class KLineHardware(HardwareABC):
 		return bytes_written
 
 	def close (self) -> None:
+		if not self.port_opened:
+			return # should this be an exception?
 		try:
 			self.socket.break_condition = False
+			self.socket.flushInput()
+			self.socket.flushOutput()
 			self.socket.close()
-			self.port_opened = False
 		except AttributeError:
 			pass
+		self.port_opened = False
 
 	def set_timeout (self, timeout: float) -> Self:
 		self.socket.timeout = timeout
