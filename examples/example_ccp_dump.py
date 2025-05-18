@@ -73,7 +73,7 @@ def main(args) -> None:
 	print('\nSending security key (UnlockProtection)')
 	ccp_client.execute(ccp.commands.UnlockProtection(key=b'\x44\x45\x45\x54\xC0\x35')).get_data()
 	
-	base_ptr = 0x60000
+	base_ptr = 0x0
 	current_ptr = base_ptr
 	read_data = bytearray()
 
