@@ -40,7 +40,6 @@ class CanHardware(HardwareABC):
 	def __init__ (self, port: str, timeout: int = 1, filters: list[CanFilter] | None = None) -> None:
 		self.port: str = port
 		self.timeout: float = timeout
-		self.port_opened: bool = False
 		self.filters: list[CanFilter] = filters if filters != None else []
 
 	def _build_filters (self) -> list[dict]:
@@ -57,10 +56,15 @@ class CanHardware(HardwareABC):
 	def open (self) -> bool:
 		try:
 			self.socket = CANSocket(channel=self.port, can_filters=self._build_filters())
-			self.port_opened = True
 		except (OSError, Scapy_Exception) as e:
 			raise OpeningPortException(e)
 		return True
+
+	def is_open (self) -> bool:
+		try:
+			return not self.socket.closed
+		except (AttributeError, TypeError, ValueError):
+			return False
 
 	def read (self, length: int) -> RawFrame:
 		try:
@@ -119,7 +123,6 @@ class CanHardware(HardwareABC):
 	def close (self) -> None:
 		if hasattr(self, 'socket'):
 			self.socket.close()
-		self.port_opened = False
 
 	def set_baudrate (self, baudrate: int) -> Self:
 		raise NotImplementedError

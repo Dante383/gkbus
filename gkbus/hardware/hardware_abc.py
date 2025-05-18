@@ -49,7 +49,7 @@ class HardwareABC(ABC):
 		:return:
 		'''
 		self.port: str = port
-		self.port_opened: bool = False
+		self._port_opened: bool = False
 
 	def open (self) -> bool:
 		'''
@@ -66,7 +66,7 @@ class HardwareABC(ABC):
 
 		:return: a boolean indicating whether the hardware socket/port is opened 
 		'''
-		return self.port_opened
+		return self._port_opened
 
 	def read (self, length: int) -> RawFrame:
 		'''
