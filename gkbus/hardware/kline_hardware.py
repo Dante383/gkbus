@@ -29,7 +29,6 @@ class KLineHardware(HardwareABC):
 	def open (self) -> bool:
 		try:
 			self.socket = serial.Serial(self.port, self.baudrate, timeout=self.timeout)
-			self.port_opened = True
 		except serial.serialutil.SerialException as e:
 			raise OpeningPortException(e)
 		
@@ -37,6 +36,12 @@ class KLineHardware(HardwareABC):
 		self._set_kline_mode()
 
 		return True
+
+	def is_open (self) -> bool:
+		try:
+			self.socket.is_open
+		except (AttributeError, TypeError, ValueError):
+			return False
 	
 	def read (self, length: int) -> RawFrame:
 		message = self.socket.read(length)
@@ -68,7 +73,7 @@ class KLineHardware(HardwareABC):
 		return bytes_written
 
 	def close (self) -> None:
-		if not self.port_opened:
+		if not self.is_open():
 			return # should this be an exception?
 		try:
 			self.socket.break_condition = False
@@ -77,7 +82,6 @@ class KLineHardware(HardwareABC):
 			self.socket.close()
 		except AttributeError:
 			pass
-		self.port_opened = False
 
 	def set_timeout (self, timeout: float) -> Self:
 		self.socket.timeout = timeout
