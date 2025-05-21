@@ -12,3 +12,9 @@ class LittleEndianBitfield(LittleEndianStructure):
 			type(self).__name__,
 			', '.join([f'{k}={v}' for k,v in self._to_dict().items()])
 		)
+
+def ms_to_ns (miliseconds: int) -> int:
+	return miliseconds*1000000
+
+def ns_to_ms (nanoseconds: int) -> int:
+	return round(nanoseconds/1000000)

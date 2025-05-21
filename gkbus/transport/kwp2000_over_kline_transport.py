@@ -53,13 +53,22 @@ class Kwp2000OverKLineTransport (TransportABC):
 		logger.debug('K-Line success: {}'.format(' '.join([hex(x) for x in list(data)])))
 		return data
 
-	def init (self, payload: bytes) -> tuple[bytes, int, int]:
+	def init (self, payload: bytes) -> list[tuple[bytes, int, int]]:
 		'''
 		Bring up the socket if not opened already and initialize the K-Line by ISO14230. 
 		'''
-		if not self.hardware.port_opened:
+		if not self.hardware.is_open():
 			self.hardware.open()
-		return self.hardware.iso14230_fast_init(self.build_payload(payload))
+
+		init_payload = self.build_payload(payload)
+		responses = []
+		responses.append(self.hardware.iso14230_fast_init(init_payload, timing_offset_ms=0))
+		# @todo: find out if there is some way to self-test and automatically measure the timing offset we should apply
+		if responses[0][0][0:1] not in [b'\x00', b'\x81', b'\xC1']: # most often seen responses, depends on the adapter
+			responses.append(self.hardware.iso14230_fast_init(init_payload, timing_offset_ms=-2))
+			responses.append(self.hardware.iso14230_fast_init(init_payload, timing_offset_ms=2))
+
+		return responses
 
 	def calculate_checksum (self, payload: bytes) -> int:
 		return sum(payload) & 0xFF

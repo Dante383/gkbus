@@ -13,6 +13,8 @@ from .hardware_abc import (
 	TimeoutException,
 )
 
+from ..utils import ns_to_ms, ms_to_ns
+
 logger = logging.getLogger(__name__)
 
 class KLineHardware(HardwareABC):
@@ -23,7 +25,7 @@ class KLineHardware(HardwareABC):
 	def __init__ (self, port: str, baudrate: int = 10400, timeout: float = 2) -> None:
 		self.port, self.baudrate = port, baudrate
 		self.timeout = timeout
-		self.port_opened = False
+		self._port_opened = False
 		self.socket: serial.Serial = None
 
 	def open (self) -> bool:
@@ -37,12 +39,6 @@ class KLineHardware(HardwareABC):
 
 		return True
 
-	def is_open (self) -> bool:
-		try:
-			self.socket.is_open
-		except (AttributeError, TypeError, ValueError):
-			return False
-	
 	def read (self, length: int) -> RawFrame:
 		message = self.socket.read(length)
 
@@ -74,14 +70,21 @@ class KLineHardware(HardwareABC):
 
 	def close (self) -> None:
 		if not self.is_open():
+			logger.info('Tried to close an already closed port')
 			return # should this be an exception?
 		try:
 			self.socket.break_condition = False
-			self.socket.flushInput()
-			self.socket.flushOutput()
+			self.socket.reset_input_buffer()
+			self.socket.reset_output_buffer()
+		except AttributeError as e:
+			logger.info('Couldn\'t flush socket buffer before closing: {}'.format(str(e)))
+			
+		try:
 			self.socket.close()
-		except AttributeError:
-			pass
+		except AttributeError as e:
+			logger.error('Couldn\'t close socket: {}'.format(str(e)))
+
+		self._port_opened = False
 
 	def set_timeout (self, timeout: float) -> Self:
 		self.socket.timeout = timeout
@@ -113,34 +116,65 @@ class KLineHardware(HardwareABC):
 		self.socket.setRTS(0)
 		time.sleep(0.1)
 
-	def iso14230_fast_init (self, payload: bytes) -> tuple[bytes, int, int]:
+	def iso14230_fast_init (self, payload: bytes, timing_offset_ms: int = 0) -> tuple[bytes, int, int]:
 		'''
 		Perform FastInit by bringing the bus down for 25ms and then up for 25ms followed by a payload
 
-		:return: response (1 byte), elapsed time in low position, elapsed time in high position
+		:return: input buffer contents (up to 40 bytes), elapsed time in low position (ms), elapsed time in high position (ms)
 		'''
 
+		fastinit_time = ms_to_ns(25-timing_offset_ms)
+
 		# FastInit low
-		start_time = time.perf_counter()
 		self.socket.break_condition = True
-		self.socket.flush()  # Ensure the break is sent immediately
-		while (time.perf_counter() - start_time) < 0.025:
+		start_time = time.monotonic_ns()
+
+		# this is commented for now, as it doesn't seem to provide anything
+		# other than messing with the timing. if it indeed doesn't solve
+		# any issue, it'll be removed completely
+		#self.socket.flush()  # Ensure the break is sent immediately
+
+		while (time.monotonic_ns() - start_time) < fastinit_time:
 			pass  # Busy-wait until 25 ms has passed
-		elapsed_time_low = time.perf_counter() - start_time
+		elapsed_time_low = time.monotonic_ns() - start_time
 
 		# FastInit high
-		start_time = time.perf_counter()
 		self.socket.break_condition = False
-		self.socket.flush()  # Ensure the break is sent immediately
-		while (time.perf_counter() - start_time) < 0.025:
+		start_time = time.monotonic_ns()
+
+		# this is commented for now, as it doesn't seem to provide anything
+		# other than messing with the timing. if it indeed doesn't solve
+		# any issue, it'll be removed completely
+		#self.socket.flush()  # Ensure the break is sent immediately
+
+		while (time.monotonic_ns() - start_time) < fastinit_time:
 			pass  # Busy-wait until 25 ms has passed
-		elapsed_time_high = time.perf_counter() - start_time
+		elapsed_time_high = time.monotonic_ns() - start_time
 		
-		# Send payload and read response
 		self.socket.write(bytes(payload))
-		response = self.socket.read(1) # most ECUs will respond with 0x00 after a successful init
-		self.socket.read(len(payload)) # i have no idea why this is suddenly returning an echo
-		return response, elapsed_time_low, elapsed_time_high
+
+		'''
+		Sure-fire way to clear out the incoming buffer. 
+		socket.reset_input_buffer() didn't provide reliable results, probably due to timing.
+		Why are we clearing out the incoming buffer?
+		On genuine FTDI chips and some of the knockoffs, there'd be 0x00 in the buffer,
+		then the request echo, and StartCommunication response afterwards.
+		...
+		On some chips, there'd be no 0x00. On some chips, there'd be no echo.
+		On some chips, the response would be completely malformed,
+		on some chips it'd be missing first 1-4 bytes, which would offset
+		the buffer and trigger "echo different than sent payload" errors.
+		-- 
+		After giving it some thought, we realized we don't care about the StartCommunication 
+		response. We don't have to know if fastinit was successful, the upcoming
+		StartDiagnosticSession request will tell us that. 
+
+		Is this the perfect solution? Probably not, but we're dealing with non-perfect
+		hardware, and we want to support all of it.
+		'''
+		response = self.socket.read(40)
+
+		return response, ns_to_ms(elapsed_time_low), ns_to_ms(elapsed_time_high)
 
 	@staticmethod
 	def available_ports () -> list[HardwarePort]:

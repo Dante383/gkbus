@@ -37,6 +37,7 @@ class Kwp2000Protocol (ProtocolABC):
 	def open (self) -> bool:
 		if not self.transport.hardware.is_open():
 			return self.transport.hardware.open()
+
 		return True
 
 	def init (self, init_command: Kwp2000Command, keepalive_command: Kwp2000Command | None = None, keepalive_delay: float = 1.5) -> bool:
@@ -47,12 +48,12 @@ class Kwp2000Protocol (ProtocolABC):
 
 			try:
 				self.transport.hardware.set_timeout(0.4)
-				(response, time_low, time_high) = self.transport.init(init_payload.to_pdu())
-				logger.debug('K-Line FastInit: success: {!r}, time low: {}, time high: {}'.format(response, time_low, time_high))
-				self.transport.read_pdu()
+				for (response, time_low, time_high) in self.transport.init(init_payload.to_pdu()):
+					logger.debug('K-Line FastInit: response: {!r}, time low: {}, time high: {}'.format(response, time_low, time_high))
+					self.transport.read_pdu()
 				self.transport.hardware.set_timeout(2)
 			except TimeoutException:
-				logger.warning('K-Line fast init failed')
+				pass
 
 			self.transport.hardware.set_timeout(2)
 		else:
@@ -118,6 +119,7 @@ class Kwp2000Protocol (ProtocolABC):
 						break
 		except KeyboardInterrupt:
 			pass
+		del self._keepalive_thread
 
 	def _start_keepalive (self) -> None:
 		'''
@@ -135,4 +137,5 @@ class Kwp2000Protocol (ProtocolABC):
 
 	def close (self) -> None:
 		self._stop_keepalive()
-		self.transport.hardware.close()
+		if self.transport.hardware.is_open():
+			self.transport.hardware.close()
