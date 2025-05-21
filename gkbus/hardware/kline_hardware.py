@@ -128,29 +128,29 @@ class KLineHardware(HardwareABC):
 
 		# FastInit low
 		self.socket.break_condition = True
-		start_time = time.monotonic_ns()
+		start_time = time.perf_counter_ns()
 
 		# this is commented for now, as it doesn't seem to provide anything
 		# other than messing with the timing. if it indeed doesn't solve
 		# any issue, it'll be removed completely
 		#self.socket.flush()  # Ensure the break is sent immediately
 
-		while (time.monotonic_ns() - start_time) < fastinit_time:
+		while (time.perf_counter_ns() - start_time) < fastinit_time:
 			pass  # Busy-wait until 25 ms has passed
-		elapsed_time_low = time.monotonic_ns() - start_time
+		elapsed_time_low = time.perf_counter_ns() - start_time
 
 		# FastInit high
 		self.socket.break_condition = False
-		start_time = time.monotonic_ns()
+		start_time = time.perf_counter_ns()
 
 		# this is commented for now, as it doesn't seem to provide anything
 		# other than messing with the timing. if it indeed doesn't solve
 		# any issue, it'll be removed completely
 		#self.socket.flush()  # Ensure the break is sent immediately
 
-		while (time.monotonic_ns() - start_time) < fastinit_time:
+		while (time.perf_counter_ns() - start_time) < fastinit_time:
 			pass  # Busy-wait until 25 ms has passed
-		elapsed_time_high = time.monotonic_ns() - start_time
+		elapsed_time_high = time.perf_counter_ns() - start_time
 		
 		self.socket.write(bytes(payload))
 
