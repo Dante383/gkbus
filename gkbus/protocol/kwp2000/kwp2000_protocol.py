@@ -115,7 +115,7 @@ class Kwp2000Protocol (ProtocolABC):
 				if elapsed_time >= self.keepalive_delay:
 					try:
 						self.execute(self.keepalive_command)
-					except (TimeoutException, Kwp2000NegativeResponseException, AttributeError):
+					except (TimeoutException, Kwp2000NegativeResponseException, AttributeError) as e:
 						break
 		except KeyboardInterrupt:
 			pass

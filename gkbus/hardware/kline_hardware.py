@@ -31,6 +31,7 @@ class KLineHardware(HardwareABC):
 	def open (self) -> bool:
 		try:
 			self.socket = serial.Serial(self.port, self.baudrate, timeout=self.timeout)
+			self._port_opened = True
 		except serial.serialutil.SerialException as e:
 			raise OpeningPortException(e)
 		
