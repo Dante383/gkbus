@@ -79,11 +79,15 @@ class KLineHardware(HardwareABC):
 			self.socket.reset_output_buffer()
 		except AttributeError as e:
 			logger.info('Couldn\'t flush socket buffer before closing: {}'.format(str(e)))
+		except serial.serialutil.PortNotOpenError:
+			pass
 			
 		try:
 			self.socket.close()
 		except AttributeError as e:
 			logger.error('Couldn\'t close socket: {}'.format(str(e)))
+		except serial.serialutil.PortNotOpenError:
+			pass
 
 		self._port_opened = False
 
