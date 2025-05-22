@@ -67,7 +67,7 @@ class TransportABC(ABC):
 		Get ready to transfer: initialize the underlaying hardware if not initialized already
 		Calling this method is not required - it's just a helper to avoid manual hardware initialization
 		'''
-		if not self.hardware.port_opened:
+		if not self.hardware.is_open():
 			return self.hardware.open()
 		return True
 
