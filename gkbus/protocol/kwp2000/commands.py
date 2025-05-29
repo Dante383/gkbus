@@ -182,7 +182,7 @@ class StartDiagnosticSession(Kwp2000Command):
 
 	def init (self, session_type: DiagnosticSession, dev_baudrate_identifier: int | None = None) -> None:
 		self.set_data(bytes([session_type.value]))
-		# while it's not present in any official documentations, most ECU manufacturers use 
+		# while it's not present in any public documentations, most ECU manufacturers use 
 		# the second parameter of StartDiagnosticSession as a baudrate switch. 
 		# for example, 0x03 on SIMK43 will result in 40k baud, 0x04 - 60k 
 		if (dev_baudrate_identifier): 
@@ -212,18 +212,19 @@ class WriteDataByIdentifier(Kwp2000Command):
 class WriteDataByLocalIdentifier(Kwp2000Command):
 	service_identifier = 0x3B
 
-	def init (self, record_local_identifier: int, record_value: list[int]) -> None:
-		self.set_data(bytes([record_local_identifier] + record_value))
+	def init (self, record_local_identifier: int, record_value: bytes) -> None:
+		# @todo: does the standard permit >0xFF identifiers?
+		self.set_data(bytes([record_local_identifier]) + record_value)
 
 class WriteMemoryByAddress(Kwp2000Command):
 	service_identifier = 0x3D
 
-	def init (self, offset: int, data_to_write: list[int]) -> None:
+	def init (self, offset: int, data_to_write: bytes) -> None:
 		size = len(data_to_write)
 
 		address = struct.pack('>L', offset)[1:]
 
-		self.set_data(bytes([*address, size] + data_to_write))
+		self.set_data(bytes([*address, size]) + data_to_write)
 
 class StopDiagnosticSession(Kwp2000Command):
 	service_identifier = 0x20

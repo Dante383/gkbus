@@ -23,7 +23,7 @@ class Kwp2000OverCanTransport (TransportABC):
 	def init (self) -> bool:
 		self.hardware.set_filters([CanFilter(can_id=self.rx_id, can_mask=0x7ff)])
 		
-		if not self.hardware.port_opened:
+		if not self.hardware.is_open():
 			self.hardware.open()
 
 		if not self.isotp:
