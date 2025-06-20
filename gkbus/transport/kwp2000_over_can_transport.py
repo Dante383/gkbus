@@ -52,7 +52,7 @@ class Kwp2000OverCanTransport (TransportABC):
 
 	def send_read_pdu (self, data: bytes) -> bytes:
 		self.buffer_push(RawPacket(direction=PacketDirection.OUTGOING, data=data, timestamp=int(time.time()*1000)))
-		response = self.isotp.sr1(ISOTP(bytes(data)), verbose=False)
+		response = self.isotp.sr1(ISOTP(bytes(data)), verbose=False, timeout=self.hardware.get_timeout())
 
 		if not response:
 			raise TimeoutException

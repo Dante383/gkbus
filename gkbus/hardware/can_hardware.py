@@ -9,8 +9,19 @@ from typing_extensions import Self
 if platform.startswith('win32'):
 	conf.contribs['CANSocket'] = {'use-python-can': True}
 else:
+	# If you're a linux guest in a windows host, this will cause
+	# "no data received, try increasing stmin" issues, ranging 
+	# from occasional to very common.
+	# Best guess so far is that since python-can won't use the
+	# native ISO-TP kernel module, the issue must be closely related
+	# to some low level device access handling in the passthrough hypervisor
+	#
+	# Case in point used a Canable interface with Candlelight firmware,
+	# Ubuntu 22.04 (5.15.0 kernel) guest on a Windows 10 v1803 host, 
+	# through VMware Workstation 16
 	conf.contribs['CANSocket'] = {'use-python-can': False}
-	from scapy.contrib.cansocket import CANSocket
+
+from scapy.contrib.cansocket import CANSocket
 from scapy.error import Scapy_Exception
 from scapy.layers.can import CAN, CAN_MAX_DLEN, CAN_MTU
 

@@ -1,8 +1,9 @@
 # GKBus
 
-Automotive diagnostic protocols library powering the [GKFlasher](https://github.com/dante383/GKFlasher)
+High level automotive protocol library
 
-```from gkbus.hardware import CanHardware, KLineHardware
+```
+from gkbus.hardware import CanHardware, KLineHardware
 from gkbus.protocol import kwp2000
 from gkbus.transport import Kwp2000OverKLineTransport
 
@@ -25,8 +26,16 @@ print('fast init')
 init_success = kwp.init(kwp2000.commands.StartCommunication())
 print('fast init : {}'.format(init_success))
 
-print('executing ReadEcuIdentification: 0x8c - bootloader version')
-response = kwp.execute(kwp2000.commands.ReadEcuIdentification(0x8c))
+print('requesting security access seed')
+response = kwp.execute(kwp2000.commands.SecurityAccess().request_seed())
+print(response.get_data())
+
+print('starting flash reprogramming diagnostic session')
+response = kwp.execute(
+	kwp2000.commands.StartDiagnosticSession(
+		kwp2000.enums.DiagnosticSession.FLASH_REPROGRAMMING
+		)
+	)
 print(response)
 ```
 

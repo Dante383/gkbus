@@ -141,17 +141,15 @@ class RequestUpload(Kwp2000Command):
 class ResponseOnEvent(Kwp2000Command):
 	service_identifier = 0x86
 
-class SecurityAccess(Kwp2000CommandWithSubservices): # @todo: refactor
+class SecurityAccess(Kwp2000CommandWithSubservices):
 	service_identifier = 0x27
 
-	def request_seed (self) -> Self:
-		return self.set_subservice_identifier(AccessType.PROGRAMMING_REQUEST_SEED.value)
+	def request_seed (self, access_level: int = AccessType.PROGRAMMING_REQUEST_SEED.value) -> Self:
+		return self.set_subservice_identifier(access_level)
 
-	def send_key (self, key: int) -> Self:
-		self.set_subservice_identifier(AccessType.PROGRAMMING_SEND_KEY.value)
-		key = key.to_bytes(2, 'big')
-		#key = key.to_bytes((key.bit_length()//6), 'big')
-		return self.append_data(bytes([*key]))
+	def send_key (self, key: bytes, access_level: int = AccessType.PROGRAMMING_SEND_KEY.value) -> Self:
+		self.set_subservice_identifier(access_level)
+		return self.append_data(key)
 
 class StartCommunication(Kwp2000Command):
 	service_identifier = 0x81
@@ -213,7 +211,6 @@ class WriteDataByLocalIdentifier(Kwp2000Command):
 	service_identifier = 0x3B
 
 	def init (self, record_local_identifier: int, record_value: bytes) -> None:
-		# @todo: does the standard permit >0xFF identifiers?
 		self.set_data(bytes([record_local_identifier]) + record_value)
 
 class WriteMemoryByAddress(Kwp2000Command):
