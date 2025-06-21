@@ -21,7 +21,7 @@ else:
 	# through VMware Workstation 16
 	conf.contribs['CANSocket'] = {'use-python-can': False}
 
-from scapy.contrib.cansocket import CANSocket
+	from scapy.contrib.cansocket import CANSocket
 from scapy.error import Scapy_Exception
 from scapy.layers.can import CAN, CAN_MAX_DLEN, CAN_MTU
 
