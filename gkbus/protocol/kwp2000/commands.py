@@ -79,6 +79,10 @@ class ReadDataByLocalIdentifier(Kwp2000Command):
 class ReadDTCsByStatus(Kwp2000Command):
 	service_identifier = 0x18
 
+	def init (self, status: DtcStatus, group: DtcGroup) -> None:
+		group = struct.pack('>H', group.value)
+		self.set_data(bytes([status.value, *group]))
+
 class ReadEcuIdentification(Kwp2000Command):
 	service_identifier = 0x1A
 
