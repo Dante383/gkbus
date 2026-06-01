@@ -21,7 +21,7 @@ else:
 	# through VMware Workstation 16
 	conf.contribs['CANSocket'] = {'use-python-can': False}
 
-	from scapy.contrib.cansocket import CANSocket
+from scapy.contrib.cansocket import CANSocket
 from scapy.error import Scapy_Exception
 from scapy.layers.can import CAN, CAN_MAX_DLEN, CAN_MTU
 
@@ -48,10 +48,11 @@ class CanHardware(HardwareABC):
 		Keys: can_id, can_mask
 	'''
 
-	def __init__ (self, port: str, timeout: int = 1, filters: list[CanFilter] | None = None) -> None:
+	def __init__ (self, port: str, timeout: int = 1, filters: list[CanFilter] | None = None, bitrate: int = 500000) -> None:
 		self.port: str = port
 		self.timeout: float = timeout
 		self.filters: list[CanFilter] = filters if filters != None else []
+		self.bitrate: int = bitrate
 
 	def _build_filters (self) -> list[dict]:
 		filters = []
@@ -66,9 +67,22 @@ class CanHardware(HardwareABC):
 
 	def open (self) -> bool:
 		try:
-			self.socket = CANSocket(channel=self.port, can_filters=self._build_filters())
+			if platform.startswith("win32"):
+				self.socket = CANSocket(
+					bustype="pcan",
+					channel=self.port,
+					bitrate=self.bitrate,
+					#can_filters=self._build_filters()
+				)
+			else:
+				self.socket = CANSocket(
+					channel=self.port,
+					can_filters=self._build_filters()
+				)
+
 		except (OSError, Scapy_Exception) as e:
 			raise OpeningPortException(e)
+
 		return True
 
 	def is_open (self) -> bool:
@@ -171,9 +185,36 @@ class CanHardware(HardwareABC):
 		return interfaces
 
 	@staticmethod
+	def _available_ports_windows() -> list[str]:
+		'''
+		Returns a list of connected PEAK PCAN-USB interfaces using the Windows registry.
+		'''		
+		import winreg
+		interfaces = []
+
+		try:
+			key = winreg.OpenKey(winreg.HKEY_LOCAL_MACHINE, r"SYSTEM\CurrentControlSet\Services\PCAN_USB\Enum")
+			count, _type = winreg.QueryValueEx(key, "Count")
+
+			for i in range(count):
+				try:
+					winreg.QueryValueEx(key, str(i))
+					interfaces.append(f"PCAN_USBBUS{i + 1}")
+				except FileNotFoundError:
+					pass
+
+			winreg.CloseKey(key)
+
+		except Exception:
+			pass
+
+		return interfaces
+
+
+	@staticmethod
 	def available_ports () -> list[HardwarePort]:
 		if platform.startswith('win32'):
-			return []
+			ports = [HardwarePort(port=x, port_name=x) for x in CanHardware._available_ports_windows()]
 		else:
 			ports = [HardwarePort(port=x, port_name=x) for x in CanHardware._available_ports_linux()]
 		
