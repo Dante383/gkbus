@@ -62,29 +62,60 @@ class CcpProtocol (ProtocolABC):
 	def execute (self, command: CcpCommand) -> CcpResponse:
 		frame = CcpRequestFrame(command.get_code(), self.command_counter, command.get_data())
 
-		response_pdu = self.transport.send_read_pdu(data=frame.to_pdu())
+		response_pdu = bytes(self.transport.send_read_pdu(data=frame.to_pdu()))
 		self.command_counter += 1
 
-		if (self.command_counter > 0xFF):
+		if self.command_counter > 0xFF:
 			self.command_counter = 0x00
 
+		# ------------------------------------------------------
+		# FIX: tolerate non-standard return codes (e.g. 0xFF ECU)
+		# ------------------------------------------------------
+		raw_rc = response_pdu[1]
+
+		try:
+			rc = CcpReturnCode(raw_rc)
+		except ValueError:
+
+			class _RawReturnCode:
+				def __init__(self, value):
+					self.code = value
+					self.value = value
+					self.name = f"UNKNOWN_0x{value:02X}"
+					self.category = "UNKNOWN"
+					# Treat 0xFF (your ECU's "OK") as success
+					self.success = (value == 0xFF or value == 0x00)
+
+				def __repr__(self):
+					return f"CcpReturnCode(code=0x{self.code:02X}, name={self.name})"
+
+			rc = _RawReturnCode(raw_rc)
+
 		response = CcpResponse(
-			CcpReturnCode(response_pdu[1]),
+			rc,
 			CcpResponseFrame(
-				packet_id=response_pdu[0], 
+				packet_id=response_pdu[0],
 				status=response_pdu[1],
 				counter=response_pdu[2],
-				data=response_pdu[3:]
-				)
+				data=response_pdu[3:8]
 			)
+		)
 
 		response = self.handle_errors(response)
 
 		return response
 
-	def handle_errors (self, response: CcpResponse) -> CcpResponse:
-		if response.success():
-			return response
+	def handle_errors(self, response: CcpResponse) -> CcpResponse:
+		try:
+			rc = response.return_code
+
+			if rc.success:
+				return response
+
+			if rc == CcpReturnCode.CODE_UPDATE_REQUEST:
+				return response
+		except:
+			pass
 
 		raise CcpNegativeResponseException(response.return_code)
 
