@@ -8,6 +8,12 @@ from typing_extensions import Self
 
 if platform.startswith('win32'):
 	conf.contribs['CANSocket'] = {'use-python-can': True}
+	import can
+	import usb.core
+	import libusb_package
+	from gs_usb.gs_usb import GsUsb
+	from serial.tools import list_ports
+
 else:
 	# If you're a linux guest in a windows host, this will cause
 	# "no data received, try increasing stmin" issues, ranging 
@@ -20,6 +26,7 @@ else:
 	# Ubuntu 22.04 (5.15.0 kernel) guest on a Windows 10 v1803 host, 
 	# through VMware Workstation 16
 	conf.contribs['CANSocket'] = {'use-python-can': False}
+	from pyroute2 import IPRoute
 
 from scapy.contrib.cansocket import CANSocket
 from scapy.error import Scapy_Exception
@@ -42,19 +49,19 @@ class CanFilter:
 
 class CanHardware(HardwareABC):
 	'''
-	Hardware class for CAN Bus interfaces. Uses Scapy as a backend
-
-	:param filters: list of dictionaries containing hardware CAN filters.
-		Keys: can_id, can_mask
+	Hardware class for CAN Bus interfaces. Uses Scapy as a backend.
 	'''
-
-	def __init__ (self, port: str, timeout: int = 1, filters: list[CanFilter] | None = None, bitrate: int = 500000) -> None:
+	def __init__ (self, port: str, bitrate: int, timeout: int = 1, filters: list[CanFilter] | None = None) -> None:
 		self.port: str = port
 		self.timeout: float = timeout
 		self.filters: list[CanFilter] = filters if filters != None else []
 		self.bitrate: int = bitrate
 
 	def _build_filters (self) -> list[dict]:
+		'''
+		Convert configured CAN filters to the format expected by Scapy.
+
+		'''
 		filters = []
 		
 		for can_filter in self.filters:
@@ -66,21 +73,72 @@ class CanHardware(HardwareABC):
 		return filters
 
 	def open (self) -> bool:
+		'''
+		Configure the CAN interface and open its Scapy socket.
+
+		Windows uses the selected python-can backend. Linux configures the
+		SocketCAN interface and bitrate before opening the socket.
+
+		'''
+		# Windows configuration for native USB CAN adapter interfaces.
 		try:
 			if platform.startswith("win32"):
-				self.socket = CANSocket(
-					bustype="pcan",
-					channel=self.port,
-					bitrate=self.bitrate,
-					#can_filters=self._build_filters()
-				)
-			else:
+				interface, channel = self.port.split(":", 1)
+
+				if interface in ("vector", "gs_usb"):
+					channel = int(channel)
+
+				elif interface not in ("pcan", "slcan"):
+					raise ValueError(
+						f"Unsupported CAN interface: {interface}"
+					)
+
+				kwargs = {
+					"bustype": interface,
+					"channel": channel,
+					"bitrate": self.bitrate,
+					"can_filters": (
+						self._build_filters() # Bug with PCAN and GS_USB filtering so i've disabled it. This might be why PCAN is slower too...
+						if interface == "vector" # It's possible can filtering isn't present in the firmware itself?
+						else None
+					),
+				}
+
+				if interface == "gs_usb":
+					kwargs["backend"] = (
+						libusb_package.get_libusb1_backend()
+					)
+
+				self.socket = CANSocket(**kwargs)
+
+		# Linux configuration for SocketCAN using IPRoute from pyroute2 to bring up the interface.
+			elif platform.startswith('linux'):
+				
+				with IPRoute() as ipr:
+					indexes = ipr.link_lookup(ifname=self.port)
+
+					if not indexes:
+						raise RuntimeError(f'CAN interface not found: {self.port}')
+
+					index = indexes[0]
+					link = ipr.get_links(index)[0]
+
+					# The bitrate can only be changed while the interface is down.
+					if link['flags'] & 1:
+						ipr.link('set', index=index, state='down')
+
+					# Configure CAN bitrate using Netlink.
+					ipr.link('set', index=index, kind='can', can_bittiming={'bitrate': self.bitrate},)
+
+					# Bring the interface up.
+					ipr.link('set', index=index, state='up')
+
 				self.socket = CANSocket(
 					channel=self.port,
 					can_filters=self._build_filters()
 				)
 
-		except (OSError, Scapy_Exception) as e:
+		except (OSError, Scapy_Exception, ValueError) as e:
 			raise OpeningPortException(e)
 
 		return True
@@ -185,37 +243,131 @@ class CanHardware(HardwareABC):
 		return interfaces
 
 	@staticmethod
-	def _available_ports_windows() -> list[str]:
-		'''
-		Returns a list of connected PEAK PCAN-USB interfaces using the Windows registry.
-		'''		
-		import winreg
-		interfaces = []
+	def _available_ports_windows () -> list[HardwarePort]:
+		"""Discover physical CAN interfaces using python-can."""
+		ports = []
 
 		try:
-			key = winreg.OpenKey(winreg.HKEY_LOCAL_MACHINE, r"SYSTEM\CurrentControlSet\Services\PCAN_USB\Enum")
-			count, _type = winreg.QueryValueEx(key, "Count")
+			configs = can.detect_available_configs()
+		except Exception as e:
+			print(f"CAN discovery failed: {e}")
+			return ports
 
-			for i in range(count):
-				try:
-					winreg.QueryValueEx(key, str(i))
-					interfaces.append(f"PCAN_USBBUS{i + 1}")
-				except FileNotFoundError:
-					pass
+		for config in configs:
+			interface = config.get("interface")
+			channel = config.get("channel")
 
-			winreg.CloseKey(key)
+			# Only discover the supported physical CAN backends.
+			if interface not in ("pcan", "vector") or channel is None:
+				continue
 
-		except Exception:
-			pass
+			if interface == "vector":
+				hw_type = config.get("hw_type")
+				hw_type_name = getattr(hw_type, "name", str(hw_type))
 
-		return interfaces
+				# Ignore Vector virtual channels.
+				if hw_type_name == "XL_HWTYPE_VIRTUAL":
+					continue
+
+			port = f"{interface}:{channel}"
+
+			vector_config = config.get("vector_channel_config")
+
+			if interface == "vector":
+				port_name = (
+					f"{config.get('device_name') or getattr(vector_config, 'name', None) or f'VN1610 Channel {channel + 1}'}"
+				)
+			else:
+				port_name = (
+					config.get("device_name")
+					or getattr(vector_config, "name", None)
+					or f"{interface} channel {channel}"
+				)
+
+			serial_number = config.get("serial_number")
+			if serial_number is None:
+				serial_number = config.get("serial")
+
+			ports.append(
+				HardwarePort(
+					port=port,
+					port_name=port_name,
+					serial_number=(
+						str(serial_number)
+						if serial_number is not None
+						else None
+					),
+					manufacturer={
+						"pcan": "Peak",
+						"vector": "Vector",
+					}.get(interface),
+				)
+			)
+
+
+		# Discover devices supported by SLCAN.
+		try:
+			supported_slcan_devices = {
+				(0xAD50, 0x60C4): "CANable",
+			}
+
+			for device in list_ports.comports():
+				vid_pid = (device.vid, device.pid)
+
+				if vid_pid not in supported_slcan_devices:
+					continue
+
+				ports.append(
+					HardwarePort(
+						port=f"slcan:{device.device}",
+						port_name=device.device,
+						serial_number=device.serial_number,
+						manufacturer=supported_slcan_devices[vid_pid],
+					)
+				)
+
+		except Exception as e:
+			print(f"SLCAN discovery failed: {e}")
+
+		# Discover devices supported by gs_usb.
+		try:
+			backend = libusb_package.get_libusb1_backend()
+
+			devices = list(
+				usb.core.find(
+					find_all=True,
+					backend=backend,
+					custom_match=GsUsb.is_gs_usb_device,
+				) or []
+			)
+
+			for channel, device in enumerate(devices):
+				ports.append(
+					HardwarePort(
+						port=f"gs_usb:{channel}",
+						port_name=(
+							f"{device.product}"
+							f"{device.serial_number} - {device.product}"
+						),
+						manufacturer=device.manufacturer or "Unknown",
+					)
+				)
+			# This prevents the error "usb.core.USBError: [Errno 13] Access denied (insufficient permissions)"
+			del device
+			del devices
+
+		except Exception as e:
+			print(f"gs_usb discovery failed: {e}")
+
+		return ports
 
 
 	@staticmethod
 	def available_ports () -> list[HardwarePort]:
 		if platform.startswith('win32'):
-			ports = [HardwarePort(port=x, port_name=x) for x in CanHardware._available_ports_windows()]
-		else:
-			ports = [HardwarePort(port=x, port_name=x) for x in CanHardware._available_ports_linux()]
-		
-		return ports
+			return CanHardware._available_ports_windows()
+
+		return [
+			HardwarePort(port=x, port_name=x)
+			for x in CanHardware._available_ports_linux()
+		]
