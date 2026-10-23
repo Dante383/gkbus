@@ -2,6 +2,7 @@ import os
 import time
 from dataclasses import dataclass
 from sys import platform
+from enum import Enum
 
 from scapy.config import conf
 from typing_extensions import Self
@@ -39,9 +40,15 @@ CAN_HEADER_LEN = CAN_MTU-CAN_MAX_DLEN
 @dataclass
 class CanFilter:
 	"""CAN identifier and mask used to filter received frames."""
-
 	can_id: int
 	can_mask: int = 0x7ff
+
+class CanBackend(Enum):
+	"""Supported CAN hardware backends."""
+	PCAN = "pcan"
+	VECTOR = "vector"
+	SLCAN = "slcan"
+	GS_USB = "gs_usb"
 
 class CanHardware(HardwareABC):
 	"""Shared CAN behaviour and backwards-compatible backend factory.
@@ -51,20 +58,22 @@ class CanHardware(HardwareABC):
 	"""
 
 	def __new__(cls, port: str, *args, **kwargs):
-		if cls is CanHardware:
-			if platform.startswith("win32"):
-				prefix = port.split(":", 1)[0] if ":" in port else ""
-				backends = {
-					"pcan": PcanCanHardware,
-					"vector": VectorCanHardware,
-					"slcan": SlcanCanHardware,
-					"gs_usb": GsUsbCanHardware,
-				}
-				try:
-					backend = backends[prefix]
-				except KeyError as exc:
-					raise ValueError(f"Unsupported CAN interface: {prefix or port}") from exc
-				return object.__new__(backend)
+		if platform.startswith("win32"):
+			prefix = port.split(":", 1)[0] if ":" in port else ""
+			backends = {
+				CanBackend.PCAN: PcanCanHardware,
+				CanBackend.VECTOR: VectorCanHardware,
+				CanBackend.SLCAN: SlcanCanHardware,
+				CanBackend.GS_USB: GsUsbCanHardware,
+			}
+			try:
+				backend_type = CanBackend(prefix)
+				backend = backends[backend_type]
+			except ValueError as exc:
+				raise ValueError(
+					f"Unsupported CAN interface: {prefix or port}"
+				) from exc
+			return object.__new__(backend)
 			if platform.startswith("linux"):
 				return object.__new__(SocketCanHardware)
 			raise RuntimeError(f"Unsupported platform: {platform}")
@@ -213,7 +222,7 @@ class PcanCanHardware(CanHardware):
 		_, channel = self.port.split(":", 1)
 		# Filtering is disabled for PCAN and GS_USB devices as it doesn't work.
 		return CANSocket(
-			bustype="pcan", channel=channel, bitrate=self.bitrate, can_filters=None
+			bustype=CanBackend.PCAN.value, channel=channel, bitrate=self.bitrate, can_filters=None
 		)
 
 
@@ -223,7 +232,7 @@ class VectorCanHardware(CanHardware):
 	def _open_socket(self):
 		_, channel = self.port.split(":", 1)
 		return CANSocket(
-			bustype="vector",
+			bustype=CanBackend.VECTOR.value,
 			channel=int(channel),
 			bitrate=self.bitrate,
 			can_filters=self._build_filters(),
@@ -237,7 +246,7 @@ class SlcanCanHardware(CanHardware):
 		_, channel = self.port.split(":", 1)
 		# Filtering is disabled for SLCAN, matching the previous implementation.
 		return CANSocket(
-			bustype="slcan", channel=channel, bitrate=self.bitrate, can_filters=None
+			bustype=CanBackend.SLCAN.value, channel=channel, bitrate=self.bitrate, can_filters=None
 		)
 
 
@@ -248,7 +257,7 @@ class GsUsbCanHardware(CanHardware):
 		import libusb_package
 
 		return CANSocket(
-			bustype="gs_usb",
+			bustype=CanBackend.GS_USB.value,
 			channel=int(self.port.split(":", 1)[1]),
 			bitrate=self.bitrate,
 			can_filters=None,
