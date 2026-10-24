@@ -1,10 +1,12 @@
 name: Create Release and Publish to PyPI
 on:
   push:
-#    branches: master
+    branches:
+      - master
+      - 'test-*[0-9][0-9]-u[0-9]*'
 jobs:
   pypi-publish:
-    runs-on: ubuntu-latest
+    runs-on: ubuntu-24.04
     environment:
       name: release
       url: https://pypi.org/p/gkbus
