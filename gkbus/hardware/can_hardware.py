@@ -218,11 +218,22 @@ class SocketCanHardware(CanHardware):
 class PcanCanHardware(CanHardware):
 	"""PEAK PCAN adapter backend (Windows/python-can)."""
 
+	# TEMPORARY Workaround: force software filtering for PCAN
+	from scapy.contrib import cansocket_python_can
+
+	cansocket_python_can._HW_FILTERED_INTERFACES = frozenset(
+		interface
+		for interface in cansocket_python_can._HW_FILTERED_INTERFACES
+		if interface != "pcan"
+	)
+
 	def _open_socket(self):
 		_, channel = self.port.split(":", 1)
-		# Filtering is disabled for PCAN and GS_USB devices as it doesn't work.
 		return CANSocket(
-			bustype=CanBackend.PCAN.value, channel=channel, bitrate=self.bitrate, can_filters=None
+			bustype=CanBackend.PCAN.value, 
+			channel=channel, 
+			bitrate=self.bitrate, 
+			can_filters=self._build_filters()
 		)
 
 
@@ -235,7 +246,7 @@ class VectorCanHardware(CanHardware):
 			bustype=CanBackend.VECTOR.value,
 			channel=int(channel),
 			bitrate=self.bitrate,
-			can_filters=self._build_filters(),
+			can_filters=self._build_filters()
 		)
 
 
@@ -244,9 +255,11 @@ class SlcanCanHardware(CanHardware):
 
 	def _open_socket(self):
 		_, channel = self.port.split(":", 1)
-		# Filtering is disabled for SLCAN, matching the previous implementation.
 		return CANSocket(
-			bustype=CanBackend.SLCAN.value, channel=channel, bitrate=self.bitrate, can_filters=None
+			bustype=CanBackend.SLCAN.value, 
+			channel=channel, 
+			bitrate=self.bitrate, 
+			can_filters=self._build_filters()
 		)
 
 
@@ -260,8 +273,8 @@ class GsUsbCanHardware(CanHardware):
 			bustype=CanBackend.GS_USB.value,
 			channel=int(self.port.split(":", 1)[1]),
 			bitrate=self.bitrate,
-			can_filters=None,
-			backend=libusb_package.get_libusb1_backend(),
+			can_filters=self._build_filters(),
+			backend=libusb_package.get_libusb1_backend()
 		)
 
 
