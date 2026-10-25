@@ -74,9 +74,9 @@ class CanHardware(HardwareABC):
 					f"Unsupported CAN interface: {prefix or port}"
 				) from exc
 			return object.__new__(backend)
-			if platform.startswith("linux"):
-				return object.__new__(SocketCanHardware)
-			raise RuntimeError(f"Unsupported platform: {platform}")
+		if platform.startswith("linux"):
+			return object.__new__(SocketCanHardware)
+		raise RuntimeError(f"Unsupported platform: {platform}")
 		return object.__new__(cls)
 
 	def __init__(
@@ -219,13 +219,14 @@ class PcanCanHardware(CanHardware):
 	"""PEAK PCAN adapter backend (Windows/python-can)."""
 
 	# TEMPORARY Workaround: force software filtering for PCAN
-	from scapy.contrib import cansocket_python_can
+	if platform.startswith("win32"):
+		from scapy.contrib import cansocket_python_can
 
-	cansocket_python_can._HW_FILTERED_INTERFACES = frozenset(
-		interface
-		for interface in cansocket_python_can._HW_FILTERED_INTERFACES
-		if interface != "pcan"
-	)
+		cansocket_python_can._HW_FILTERED_INTERFACES = frozenset(
+			interface
+			for interface in cansocket_python_can._HW_FILTERED_INTERFACES
+			if interface != "pcan"
+		)
 
 	def _open_socket(self):
 		_, channel = self.port.split(":", 1)
@@ -267,14 +268,12 @@ class GsUsbCanHardware(CanHardware):
 	"""GS-USB/CANable backend (Windows/python-can)."""
 
 	def _open_socket(self):
-		import libusb_package
 
 		return CANSocket(
 			bustype=CanBackend.GS_USB.value,
 			channel=int(self.port.split(":", 1)[1]),
 			bitrate=self.bitrate,
 			can_filters=self._build_filters(),
-			backend=libusb_package.get_libusb1_backend()
 		)
 
 
@@ -329,28 +328,25 @@ def _available_ports_windows() -> list[HardwarePort]:
 		pass
 
 	try:
-		import usb.core
-		import libusb_package
-		from gs_usb.gs_usb import GsUsb
+		from can.interfaces.gs_usb import GsUsb
+		from usb.util import dispose_resources
 
-		backend = libusb_package.get_libusb1_backend()
-		devices = list(usb.core.find(
-			find_all=True,
-			backend=backend,
-			custom_match=GsUsb.is_gs_usb_device,
-		) or [])
-		for channel, device in enumerate(devices):
-			product = getattr(device, "product", None) or "GS-USB"
-			serial_number = getattr(device, "serial_number", None)
+		for channel, adapter in enumerate(GsUsb.scan()):
+			try:
+				product = adapter.gs_usb.product or "GS-USB"
+				manufacturer = adapter.gs_usb.manufacturer or "Unknown"
+				serial_number = adapter.gs_usb.serial_number or None
+			finally:
+				dispose_resources(adapter.gs_usb)
+				# This prevents the error "usb.core.USBError: [Errno 13] Access denied (insufficient permissions)"
 			ports.append(HardwarePort(
 				port=f"gs_usb:{channel}",
-				port_name=f"{product}",
-				manufacturer=getattr(device, "manufacturer", None) or "Unknown",
+				port_name=product,
+				serial_number=product,
+				manufacturer=manufacturer,
 			))
-		# This prevents the error "usb.core.USBError: [Errno 13] Access denied (insufficient permissions)"
-		del device
-		del devices
-	except Exception:
-		pass
+
+	except Exception as exc:
+		print(f"GS-USB discovery failed: {exc}")
 
 	return ports
