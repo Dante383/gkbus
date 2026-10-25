@@ -2,3 +2,4 @@ pyserial==3.5
 scapy==2.8.0
 typing_extensions==4.12.2
 python_can==4.6.1
+pyroute2==0.9.7

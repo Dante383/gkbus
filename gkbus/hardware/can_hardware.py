@@ -214,6 +214,16 @@ class SocketCanHardware(CanHardware):
 
 		return CANSocket(channel=self.port, can_filters=self._build_filters())
 
+	def close(self) -> None:
+		from pyroute2 import IPRoute
+
+		try:
+			super().close()
+		finally:
+			with IPRoute() as ipr:
+				indexes = ipr.link_lookup(ifname=self.port)
+				if indexes:
+					ipr.link("set", index=indexes[0], state="down")
 
 class PcanCanHardware(CanHardware):
 	"""PEAK PCAN adapter backend (Windows/python-can)."""
