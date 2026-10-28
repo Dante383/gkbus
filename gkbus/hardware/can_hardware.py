@@ -134,6 +134,11 @@ class CanHardware(HardwareABC):
 		"""Read one CAN frame, raising ``TimeoutException`` on timeout."""
 		if self.socket is None:
 			raise RuntimeError("CAN interface is not open")
+		if self._raw:
+			packet = self.socket.recv(timeout=self.timeout)
+			if packet is None:
+				raise TimeoutException
+			return RawFrame(identifier=packet.arbitration_id, data=bytes(packet.data))
 		try:
 			packet = self.socket.sniff(timeout=self.timeout, count=1)[0]
 		except IndexError as exc:
@@ -144,6 +149,12 @@ class CanHardware(HardwareABC):
 		"""Transmit a frame and return the number of CAN payload bytes."""
 		if self.socket is None:
 			raise RuntimeError("CAN interface is not open")
+		if self._raw:
+			from can import Message
+
+			self.socket.send(Message(arbitration_id=frame.identifier,
+				is_extended_id=frame.identifier > 0x7ff, data=frame.data))
+			return len(frame.data)
 		packet = CAN(identifier=frame.identifier, data=frame.data)
 		return self.socket.send(packet) - CAN_HEADER_LEN
 
@@ -246,6 +257,8 @@ class SocketCanHardware(CanHardware):
 		return CANSocket(channel=self.port, can_filters=self._build_filters())
 
 	def close(self) -> None:
+		if self.socket is None:
+			return
 		from pyroute2 import IPRoute
 
 		try:
@@ -258,16 +271,6 @@ class SocketCanHardware(CanHardware):
 
 class PcanCanHardware(CanHardware):
 	"""PEAK PCAN adapter backend (Windows/python-can)."""
-
-	# TEMPORARY Workaround: force software filtering for PCAN
-	if platform.startswith("win32"):
-		from scapy.contrib import cansocket_python_can
-
-		cansocket_python_can._HW_FILTERED_INTERFACES = frozenset(
-			interface
-			for interface in cansocket_python_can._HW_FILTERED_INTERFACES
-			if interface != "pcan"
-		)
 
 	def _open_socket(self):
 		_, channel = self.port.split(":", 1)
