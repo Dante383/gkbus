@@ -118,6 +118,9 @@ class CanHardware(HardwareABC):
 
 	def open(self, *, raw: bool = False) -> bool:
 		"""Configure and open the selected CAN interface."""
+		if self.socket is not None:
+			# Release the old connection before switching socket types/serial ports.
+			self.close()
 		self._raw = raw
 		try:
 			self.socket = self._open_socket()
@@ -166,7 +169,8 @@ class CanHardware(HardwareABC):
 		self.filters = list(filters)
 		if self.is_open():
 			self.close()
-			self.open()
+			# This prevents an intermediate Scapy socket during GS-USB handover.
+			self.open(raw=self._raw)
 		return self
 
 	def add_filter(self, can_filter: CanFilter) -> Self:
