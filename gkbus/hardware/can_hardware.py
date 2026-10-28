@@ -1,6 +1,7 @@
 import os
 import time
 from dataclasses import dataclass
+from threading import Lock
 from sys import platform
 from enum import Enum
 
@@ -91,6 +92,9 @@ class CanHardware(HardwareABC):
 		self.timeout = timeout
 		self.filters = list(filters or [])
 		self.socket = None
+		self._raw = False
+		self._isotp_stack = None
+		self._close_lock = Lock()
 
 	def _build_filters(self) -> list[dict] | None:
 		"""Convert filters to the dictionary format expected by Scapy."""
@@ -100,12 +104,21 @@ class CanHardware(HardwareABC):
 		]
 		return filters or None
 
+	def _create_socket(self, **kwargs):
+		"""Use a direct python-can bus for Windows ISO-TP, or Scapy for raw CAN."""
+		if self._raw:
+			from can import Bus
+
+			return Bus(**kwargs)
+		return CANSocket(**kwargs)
+
 	def _open_socket(self):
 		"""Create the backend socket. Implemented by concrete subclasses."""
 		raise NotImplementedError
 
-	def open(self) -> bool:
+	def open(self, *, raw: bool = False) -> bool:
 		"""Configure and open the selected CAN interface."""
+		self._raw = raw
 		try:
 			self.socket = self._open_socket()
 		except (OSError, Scapy_Exception, ValueError, RuntimeError) as exc:
@@ -113,6 +126,8 @@ class CanHardware(HardwareABC):
 		return True
 
 	def is_open(self) -> bool:
+		if self._raw:
+			return self.socket is not None and not self.socket._is_shutdown
 		return self.socket is not None and not getattr(self.socket, "closed", True)
 
 	def read(self, length: int) -> RawFrame:
@@ -147,9 +162,25 @@ class CanHardware(HardwareABC):
 		return self.set_filters(self.get_filters() + [can_filter])
 
 	def close(self) -> None:
-		if self.socket is not None:
-			self.socket.close()
-			self.socket = None
+		# GUI workers and exception handlers may close the same bus concurrently.
+		with self._close_lock:
+			if self._isotp_stack is not None:
+				# Stop the receive worker while its CAN bus is still open.
+				self._isotp_stack.stop()
+				self._isotp_stack = None
+			if self.socket is not None:
+				if self._raw:
+					try:
+						self.socket.shutdown()
+					finally:
+						if isinstance(self, GsUsbCanHardware):
+							from usb.util import dispose_resources
+
+							# A stopped ISO-TP stack can still retain the bus and USB handle.
+							dispose_resources(self.socket.gs_usb.gs_usb)
+				else:
+					self.socket.close()
+				self.socket = None
 
 	def set_baudrate(self, baudrate: int) -> Self:
 		if baudrate == self.bitrate:
@@ -240,7 +271,7 @@ class PcanCanHardware(CanHardware):
 
 	def _open_socket(self):
 		_, channel = self.port.split(":", 1)
-		return CANSocket(
+		return self._create_socket(
 			bustype=CanBackend.PCAN.value, 
 			channel=channel, 
 			bitrate=self.bitrate, 
@@ -253,9 +284,10 @@ class VectorCanHardware(CanHardware):
 
 	def _open_socket(self):
 		_, channel = self.port.split(":", 1)
-		return CANSocket(
+		return self._create_socket(
 			bustype=CanBackend.VECTOR.value,
 			channel=int(channel),
+			app_name=None,
 			bitrate=self.bitrate,
 			can_filters=self._build_filters()
 		)
@@ -266,7 +298,7 @@ class SlcanCanHardware(CanHardware):
 
 	def _open_socket(self):
 		_, channel = self.port.split(":", 1)
-		return CANSocket(
+		return self._create_socket(
 			bustype=CanBackend.SLCAN.value, 
 			channel=channel, 
 			bitrate=self.bitrate, 
@@ -278,13 +310,30 @@ class GsUsbCanHardware(CanHardware):
 	"""GS-USB/CANable backend (Windows/python-can)."""
 
 	def _open_socket(self):
+		_initialize_gs_usb_backend()
 
-		return CANSocket(
+		return self._create_socket(
 			bustype=CanBackend.GS_USB.value,
 			channel=int(self.port.split(":", 1)[1]),
 			bitrate=self.bitrate,
-			can_filters=self._build_filters(),
+			# can-isotp filters by address. Avoid python-can's filtering loop
+			# shrinking USB timeouts until they round to an indefinite wait.
+			can_filters=None if self._raw else self._build_filters(),
 		)
+
+
+def _initialize_gs_usb_backend() -> None:
+	"""Load system libusb or the packaged Windows DLL before gs_usb scans."""
+	from usb.backend import libusb1
+
+	if libusb1.get_backend() is not None:
+		return
+	if platform.startswith("win32"):
+			from libusb_package import find_library
+
+			if libusb1.get_backend(find_library=find_library) is not None:
+				return
+	raise RuntimeError("Unable to load the libusb backend required by GS-USB")
 
 
 def _available_ports_windows() -> list[HardwarePort]:
@@ -304,6 +353,8 @@ def _available_ports_windows() -> list[HardwarePort]:
 			continue
 		if interface == "vector" and getattr(config.get("hw_type"), "name", "") == "XL_HWTYPE_VIRTUAL":
 			continue
+		if interface == "vector":
+			channel = config["channel_index"]
 
 		vector_config = config.get("vector_channel_config")
 		port_name = (
@@ -341,6 +392,7 @@ def _available_ports_windows() -> list[HardwarePort]:
 		from can.interfaces.gs_usb import GsUsb
 		from usb.util import dispose_resources
 
+		_initialize_gs_usb_backend()
 		for channel, adapter in enumerate(GsUsb.scan()):
 			try:
 				product = adapter.gs_usb.product or "GS-USB"
