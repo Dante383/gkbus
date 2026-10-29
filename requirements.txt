@@ -2,4 +2,8 @@ pyserial==3.5
 scapy==2.8.0
 typing_extensions==4.12.2
 python_can==4.6.1
-pyroute2==0.9.7
+pyroute2==0.9.7; sys_platform == 'linux'
+pyusb==1.3.1; sys_platform == 'win32'
+gs-usb==0.3.1; sys_platform == 'win32'
+can-isotp==2.0.7; sys_platform == 'win32'
+libusb-package==1.0.30.0; sys_platform == 'win32'
