@@ -6,7 +6,7 @@ from sys import platform
 from enum import Enum
 
 from scapy.config import conf
-from typing_extensions import Self
+from typing import Self
 
 if platform.startswith('win32'):
 	conf.contribs['CANSocket'] = {'use-python-can': True}

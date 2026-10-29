@@ -1,7 +1,7 @@
 from abc import ABC
 from dataclasses import dataclass
 
-from typing_extensions import Self
+from typing import Self
 
 
 class HardwareException(IOError):
