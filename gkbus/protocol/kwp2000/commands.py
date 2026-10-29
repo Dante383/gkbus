@@ -1,6 +1,6 @@
 import struct
 
-from typing_extensions import Self
+from typing import Self
 
 from .enums import *
 from .kwp2000_command import Kwp2000Command, Kwp2000CommandWithSubservices

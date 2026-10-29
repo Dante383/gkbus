@@ -2,7 +2,7 @@ from abc import ABC
 from dataclasses import dataclass
 from enum import Enum
 
-from typing_extensions import Self
+from typing import Self
 
 from ..hardware.hardware_abc import HardwareABC
 

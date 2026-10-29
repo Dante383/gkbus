@@ -3,7 +3,7 @@ import time
 
 import serial
 import serial.tools.list_ports
-from typing_extensions import Self
+from typing import Self
 
 from .hardware_abc import (
 	HardwareABC,
