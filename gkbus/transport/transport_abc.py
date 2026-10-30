@@ -62,6 +62,26 @@ class TransportABC(ABC):
 		self.tx_id, self.rx_id = tx_id, rx_id
 		self.buffer = []
 
+	def open (self) -> bool:
+		'''
+		Open the underlaying hardware
+
+		:return: a boolean indicating whether it was opened successfully
+		'''
+		return self.hardware.open()
+
+	def is_open (self) -> bool:
+		'''
+		Check whether the underlaying hardware is open
+		'''
+		return self.hardware.is_open()
+
+	def close (self) -> None:
+		'''
+		Close the underlaying hardware
+		'''
+		self.hardware.close()
+
 	def init (self, init_pdu: bytes | None = None) -> bool:
 		'''
 		Get ready to transfer: initialize the underlaying hardware if not initialized already

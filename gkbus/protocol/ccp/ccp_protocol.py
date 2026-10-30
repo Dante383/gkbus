@@ -56,9 +56,6 @@ class CcpProtocol (ProtocolABC):
 		if byte_order != 'little':
 			raise NotImplementedError('Byte order switching isn\'t implemented yet. You can resort to manually setting data attribute on commands')
 
-	def open (self) -> bool:
-		return self.transport.hardware.open()
-
 	def execute (self, command: CcpCommand) -> CcpResponse:
 		frame = CcpRequestFrame(command.get_code(), self.command_counter, command.get_data())
 
@@ -118,6 +115,3 @@ class CcpProtocol (ProtocolABC):
 			pass
 
 		raise CcpNegativeResponseException(response.return_code)
-
-	def close (self) -> None:
-		self.transport.hardware.close()

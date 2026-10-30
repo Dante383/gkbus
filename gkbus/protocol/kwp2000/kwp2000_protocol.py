@@ -33,12 +33,6 @@ class Kwp2000RequestFrame:
 		return self.service_identifier.to_bytes(1, 'big') + self.data
 
 class Kwp2000Protocol (ProtocolABC):
-	def open (self) -> bool:
-		if not self.transport.hardware.is_open():
-			return self.transport.hardware.open()
-
-		return True
-
 	def init (self, init_command: Kwp2000Command, keepalive_command: Kwp2000Command | None = None, keepalive_delay: float = 1.5) -> bool:
 		init_frame = Kwp2000RequestFrame(init_command.get_service_identifier(), init_command.get_data())
 		self.transport.init(init_frame.to_pdu())
@@ -89,7 +83,7 @@ class Kwp2000Protocol (ProtocolABC):
 		try:
 			while not self._keepalive_event.is_set():
 				time.sleep(1)
-				if not self.transport.hardware.is_open(): 
+				if not self.transport.is_open(): 
 					# this is solving a problem introduced by time.sleep 
 					# being at the beginning of the loop instead of the end
 					# time.sleep at the beginning is solving another problem
@@ -121,5 +115,4 @@ class Kwp2000Protocol (ProtocolABC):
 
 	def close (self) -> None:
 		self._stop_keepalive()
-		if self.transport.hardware.is_open():
-			self.transport.hardware.close()
+		super().close()
