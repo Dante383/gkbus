@@ -4,7 +4,6 @@ import time
 from dataclasses import dataclass
 
 from ...hardware import TimeoutException
-from ...transport import Kwp2000OverKLineTransport
 from ..protocol_abc import ProtocolABC, ProtocolException
 from .kwp2000_command import Kwp2000Command
 from .kwp2000_negative_status import Kwp2000NegativeStatus, Kwp2000NegativeStatusIdentifierEnum
@@ -41,23 +40,8 @@ class Kwp2000Protocol (ProtocolABC):
 		return True
 
 	def init (self, init_command: Kwp2000Command, keepalive_command: Kwp2000Command | None = None, keepalive_delay: float = 1.5) -> bool:
-		if isinstance(self.transport, Kwp2000OverKLineTransport):
-			self.open()
-			
-			init_payload = Kwp2000RequestFrame(init_command.get_service_identifier(), init_command.get_data())
-
-			try:
-				self.transport.hardware.set_timeout(0.4)
-				for (response, time_low, time_high) in self.transport.init(init_payload.to_pdu()):
-					logger.debug('K-Line FastInit: response: {!r}, time low: {}, time high: {}'.format(response, time_low, time_high))
-					self.transport.read_pdu()
-				self.transport.hardware.set_timeout(2)
-			except TimeoutException:
-				pass
-
-			self.transport.hardware.set_timeout(2)
-		else:
-			self.transport.init()
+		init_frame = Kwp2000RequestFrame(init_command.get_service_identifier(), init_command.get_data())
+		self.transport.init(init_frame.to_pdu())
 
 		self._execute_lock = threading.Lock()
 

@@ -62,10 +62,14 @@ class TransportABC(ABC):
 		self.tx_id, self.rx_id = tx_id, rx_id
 		self.buffer = []
 
-	def init (self) -> bool:
+	def init (self, init_pdu: bytes | None = None) -> bool:
 		'''
 		Get ready to transfer: initialize the underlaying hardware if not initialized already
+		and perform any bus-specific wake-up (e.g. fast init on K-Line).
 		Calling this method is not required - it's just a helper to avoid manual hardware initialization
+
+		:param init_pdu: optional PDU used by transports that need one to wake up the bus,
+			ignored by the others
 		'''
 		if not self.hardware.is_open():
 			return self.hardware.open()

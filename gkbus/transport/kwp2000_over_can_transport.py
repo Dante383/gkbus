@@ -21,7 +21,7 @@ class Kwp2000OverCanTransport (TransportABC):
 		self.tx_id, self.rx_id = tx_id, rx_id
 		self.isotp = None
 
-	def init (self) -> bool:
+	def init (self, init_pdu: bytes | None = None) -> bool:
 		if self.isotp is not None and (not platform.startswith('win32') or self.isotp.started):
 			return True
 		self.hardware.set_filters([CanFilter(can_id=self.rx_id, can_mask=0x7ff)])

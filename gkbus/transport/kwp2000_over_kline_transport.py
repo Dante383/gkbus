@@ -1,7 +1,7 @@
 import logging
 import time
 
-from ..hardware.hardware_abc import HardwareABC, RawFrame
+from ..hardware.hardware_abc import HardwareABC, RawFrame, TimeoutException
 from .transport_abc import PacketDirection, RawPacket, TransportABC
 
 logger = logging.getLogger(__name__)
@@ -53,14 +53,42 @@ class Kwp2000OverKLineTransport (TransportABC):
 		logger.debug('K-Line success: {}'.format(' '.join([hex(x) for x in list(data)])))
 		return data
 
-	def init (self, payload: bytes) -> list[tuple[bytes, int, int]]:
+	def init (self, init_pdu: bytes | None = None) -> bool:
 		'''
-		Bring up the socket if not opened already and initialize the K-Line by ISO14230. 
+		Bring up the socket if not opened already and, if a StartCommunication PDU is provided,
+		wake up the ECU with ISO14230 fast init.
+
+		Responses to the fast init are drained and timeouts are ignored - the first
+		real request will tell whether the ECU is listening.
+
+		:param init_pdu: StartCommunication PDU to send as part of the fast init
 		'''
 		if not self.hardware.is_open():
 			self.hardware.open()
 
-		init_payload = self.build_payload(payload)
+		if init_pdu is None:
+			return True
+
+		previous_timeout = self.hardware.get_timeout()
+		self.hardware.set_timeout(0.4)
+		try:
+			for (response, time_low, time_high) in self._fast_init(init_pdu):
+				logger.debug('K-Line FastInit: response: {!r}, time low: {}, time high: {}'.format(response, time_low, time_high))
+				self.read_pdu()
+		except TimeoutException:
+			pass
+		finally:
+			self.hardware.set_timeout(previous_timeout)
+
+		return True
+
+	def _fast_init (self, init_pdu: bytes) -> list[tuple[bytes, int, int]]:
+		'''
+		Perform ISO14230 fast init, retrying with shifted timing if the first attempt got an unexpected response
+
+		:return: (response, time low in ms, time high in ms) for every attempt
+		'''
+		init_payload = self.build_payload(init_pdu)
 		responses = []
 		responses.append(self.hardware.iso14230_fast_init(init_payload, timing_offset_ms=0))
 		# @todo: find out if there is some way to self-test and automatically measure the timing offset we should apply
