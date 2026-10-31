@@ -121,8 +121,14 @@ class FakeNetlink:
 	like it does for a user without CAP_NET_ADMIN
 	'''
 
-	def __init__ (self, up: bool, bitrate: int = 500_000, error: int | None = None) -> None:
-		self.up, self.bitrate, self.error = up, bitrate, error
+	def __init__ (
+		self,
+		up: bool,
+		bitrate: int | None = 500_000,
+		kind: str = 'can',
+		error: int | None = None,
+	) -> None:
+		self.up, self.bitrate, self.kind, self.error = up, bitrate, kind, error
 		self.changes: list[dict] = []
 
 	def __call__ (self) -> 'FakeNetlink':
@@ -145,9 +151,10 @@ class FakeNetlink:
 		return 1 if self.up else 0
 
 	def get (self, path: tuple) -> object:
+		bittiming = {'bitrate': self.bitrate} if self.bitrate is not None else None
 		return {
-			('linkinfo', 'kind'): 'can',
-			('linkinfo', 'data', 'can_bittiming'): {'bitrate': self.bitrate},
+			('linkinfo', 'kind'): self.kind,
+			('linkinfo', 'data', 'can_bittiming'): bittiming,
 		}.get(path)
 
 	def link (self, command: str, index: int, **kwargs: object) -> None:
@@ -161,29 +168,38 @@ def open_socketcan (monkeypatch: pytest.MonkeyPatch, netlink: FakeNetlink) -> So
 	channel.open()
 	return channel
 
-def test_socketcan_resets_link (monkeypatch: pytest.MonkeyPatch) -> None:
-	netlink = FakeNetlink(up=True)
+def test_socketcan_uses_ready_link_as_is (monkeypatch: pytest.MonkeyPatch) -> None:
+	netlink = FakeNetlink(up=True, error=errno.EPERM)
+	channel = open_socketcan(monkeypatch, netlink)
+	assert channel.is_open()
+	# already up at our bitrate - nothing to change, so no permission needed either
+	channel.close()
+	assert netlink.changes == []
+
+def test_socketcan_uses_ready_vcan_as_is (monkeypatch: pytest.MonkeyPatch) -> None:
+	netlink = FakeNetlink(up=True, bitrate=None, kind='vcan', error=errno.EPERM)
+	open_socketcan(monkeypatch, netlink).close()
+
+@pytest.mark.parametrize('netlink, expected', [
+	(FakeNetlink(up=False), []),
+	(FakeNetlink(up=True, bitrate=250_000), [{'state': 'down'}]),
+])
+def test_socketcan_configures_link (
+	monkeypatch: pytest.MonkeyPatch, netlink: FakeNetlink, expected: list[dict],
+) -> None:
 	channel = open_socketcan(monkeypatch, netlink)
 	assert netlink.changes == [
-		{'state': 'down'},
+		*expected,
 		{'kind': 'can', 'can_bittiming': {'bitrate': 500_000}},
 		{'state': 'up'},
 	]
 	channel.close()
 	assert netlink.changes[-1] == {'state': 'down'}
 
-def test_socketcan_without_permission_uses_link_as_is (monkeypatch: pytest.MonkeyPatch) -> None:
-	netlink = FakeNetlink(up=True, error=errno.EPERM)
-	channel = open_socketcan(monkeypatch, netlink)
-	assert channel.is_open()
-	# left up for whoever set it up
-	channel.close()
-	assert not channel.is_open()
-
 @pytest.mark.parametrize('netlink, message', [
-	(FakeNetlink(up=False, error=errno.EPERM), 'can0 is down'),
-	(FakeNetlink(up=True, bitrate=250_000, error=errno.EPERM), 'can0 runs at 250000'),
-	(FakeNetlink(up=True, error=errno.EINVAL), 'Configuring can0 failed'),
+	(FakeNetlink(up=False, error=errno.EPERM), 'can0 is down and gkbus has no permission'),
+	(FakeNetlink(up=True, bitrate=250_000, error=errno.EPERM), 'can0 runs at 250000 bit/s'),
+	(FakeNetlink(up=True, bitrate=250_000, error=errno.EINVAL), 'Configuring can0 failed'),
 ])
 def test_socketcan_open_fails (
 	monkeypatch: pytest.MonkeyPatch, netlink: FakeNetlink, message: str,

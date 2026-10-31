@@ -22,9 +22,9 @@ class SocketCanChannel(PythonCanChannel):
 	'''
 	CAN bus on a Linux SocketCAN network interface (e.g. can0).
 
-	Opening takes the interface down, sets the bitrate and brings it back up, so nothing is
-	left over from before. Closing takes it down again. Both need CAP_NET_ADMIN (root) - without
-	it, an interface that's already up at the right bitrate is used as it is and left alone.
+	An interface that's already up at the right bitrate is used as it is and left up. Otherwise
+	opening sets the bitrate and brings it up, and closing takes it down again - that needs
+	CAP_NET_ADMIN (root).
 	ISO-TP is done by the kernel. The raw socket for send() and recv() is only created once
 	they're used, so it doesn't queue up frames nobody reads
 	'''
@@ -53,12 +53,14 @@ class SocketCanChannel(PythonCanChannel):
 			with IPRoute() as ipr:
 				index = self._link_index(ipr)
 				link = ipr.get_links(index)[0]
+				if self._link_ready(link):
+					return
 				try:
 					self._configure_link(ipr, index, link)
 				except NetlinkError as e:
-					if e.code not in PERMISSION_ERRORS:
-						raise
-					self._use_link_as_is(link)
+					if e.code in PERMISSION_ERRORS:
+						raise OpeningChannelException(self._no_permission(link)) from e
+					raise
 		except OpeningChannelException:
 			raise
 		except (NetlinkError, OSError, RuntimeError) as e:
@@ -66,41 +68,47 @@ class SocketCanChannel(PythonCanChannel):
 				'Configuring {} failed: {}'.format(self.ifname, e)
 			) from e
 
+	def _link_ready (self, link: 'ifinfmsg') -> bool:
+		'''
+		Up, and at our bitrate if it has one (virtual interfaces don't)
+		'''
+		if not link['flags'] & LINK_UP:
+			return False
+		bitrate = self._link_bitrate(link)
+		if bitrate is not None and bitrate != self.bitrate:
+			logger.info('{} runs at {} bit/s, reconfiguring it to {}'.format(
+				self.ifname, bitrate, self.bitrate
+			))
+			return False
+		return True
+
 	def _configure_link (self, ipr: 'IPRoute', index: int, link: 'ifinfmsg') -> None:
 		if link['flags'] & LINK_UP:
 			ipr.link('set', index=index, state='down')
-		# virtual interfaces have no bitrate
-		if not self._is_vcan(link):
+		if self._has_bitrate(link):
 			ipr.link('set', index=index, kind='can', can_bittiming={'bitrate': self.bitrate})
 		ipr.link('set', index=index, state='up')
 		self._link_configured = True
 
-	def _use_link_as_is (self, link: 'ifinfmsg') -> None:
-		'''
-		No permission to configure the interface - fine if it's already set up the way we need
-		'''
-		setup = 'sudo ip link set {} down; sudo ip link set {} up type can bitrate {}'.format(
-			self.ifname, self.ifname, self.bitrate
-		)
+	def _no_permission (self, link: 'ifinfmsg') -> str:
+		if self._has_bitrate(link):
+			setup = 'sudo ip link set {} down; sudo ip link set {} up type can bitrate {}'.format(
+				self.ifname, self.ifname, self.bitrate
+			)
+		else:
+			setup = 'sudo ip link set {} up'.format(self.ifname)
 		if not link['flags'] & LINK_UP:
-			raise OpeningChannelException(
-				'{} is down and gkbus has no permission to bring it up. Run: {}'.format(
-					self.ifname, setup
-				)
+			problem = '{} is down'.format(self.ifname)
+		else:
+			problem = '{} runs at {} bit/s, {} needed'.format(
+				self.ifname, self._link_bitrate(link), self.bitrate
 			)
-		bittiming = link.get(('linkinfo', 'data', 'can_bittiming')) or {}
-		bitrate = bittiming.get('bitrate')
-		if not self._is_vcan(link) and bitrate is not None and bitrate != self.bitrate:
-			raise OpeningChannelException(
-				'{} runs at {} bit/s, {} needed and gkbus has no permission to change it. '
-				'Run: {}'.format(self.ifname, bitrate, self.bitrate, setup)
-			)
-		logger.info('No permission to reset {}, using it as it is'.format(self.ifname))
+		return '{} and gkbus has no permission to configure it. Run: {}'.format(problem, setup)
 
 	def _close (self) -> None:
 		from pyroute2 import IPRoute, NetlinkError
 
-		# an interface we couldn't configure isn't ours to take down
+		# an interface that was already up isn't ours to take down
 		if not self._link_configured:
 			return
 		self._link_configured = False
@@ -126,8 +134,16 @@ class SocketCanChannel(PythonCanChannel):
 		] or None
 
 	@staticmethod
-	def _is_vcan (link: 'ifinfmsg') -> bool:
-		return link.get(('linkinfo', 'kind')) == 'vcan'
+	def _has_bitrate (link: 'ifinfmsg') -> bool:
+		'''
+		Physical CAN interface, not vcan or similar
+		'''
+		return link.get(('linkinfo', 'kind')) == 'can'
+
+	@staticmethod
+	def _link_bitrate (link: 'ifinfmsg') -> int | None:
+		bittiming = link.get(('linkinfo', 'data', 'can_bittiming')) or {}
+		return bittiming.get('bitrate')
 
 	def _link_index (self, ipr: 'IPRoute') -> int:
 		indexes = ipr.link_lookup(ifname=self.ifname)
