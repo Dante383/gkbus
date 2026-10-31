@@ -14,7 +14,8 @@ sys.path.insert(0, parentdir)
 import argparse
 import logging
 
-from gkbus.hardware import CanHardware, TimeoutException
+from gkbus import TimeoutException
+from gkbus.device import Bus, discover
 from gkbus.protocol import ccp
 from gkbus.transport import CcpOverCanTransport, PacketDirection, RawPacket
 
@@ -35,14 +36,14 @@ def test_availability (ccp_client: ccp.CcpProtocol, station_id: int) -> bool:
 	return False
 		
 def main(args) -> None:
-	print('Available CanHardware ports:')
-	can_ports = CanHardware.available_ports()
-	for port in can_ports:
-		print(f'    {port.description()}')
+	print('Available CAN bus devices:')
+	devices = discover({Bus.CANBUS})
+	for device in devices:
+		print(f'    {device.description()}')
 
-	print('Creating hardware')
-	hardware = CanHardware(can_ports[0].port)
-	transport = CcpOverCanTransport(hardware, tx_id=0x7e8, rx_id=0x7ea)
+	print('Creating CAN bus channel')
+	channel = devices[0].canbus()
+	transport = CcpOverCanTransport(channel, tx_id=0x7e8, rx_id=0x7ea)
 	transport.init()
 
 	ccp_client = ccp.CcpProtocol(transport)
@@ -53,8 +54,8 @@ def main(args) -> None:
 		print('positive response')
 	else:
 		print('timeout. switching to tx_id=0x6a0, rx_id=0x6a1')
-		hardware.close()
-		transport = CcpOverCanTransport(hardware, tx_id=0x6a0, rx_id=0x6a1)
+		transport.close()
+		transport = CcpOverCanTransport(channel, tx_id=0x6a0, rx_id=0x6a1)
 		transport.init()
 		ccp_client.transport = transport
 		availability = test_availability(ccp_client, 0x01)

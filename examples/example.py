@@ -10,25 +10,21 @@ sys.path.insert(0, parentdir)
 import argparse
 import logging
 
-from gkbus.hardware import CanHardware, KLineHardware
+from gkbus.device import Bus, discover, find_device
 from gkbus.protocol import kwp2000
 from gkbus.transport import Kwp2000OverKLineTransport
 
 
-def main() -> None:
-	print('available KLineHardware ports')
-	ports = KLineHardware.available_ports()
-	for port in ports:
-		print(f'    {port.description()}')
+def main(port: str | None) -> None:
+	print('available K-Line devices')
+	devices = discover({Bus.KLINE})
+	for device in devices:
+		print(f'    {device.description()}')
 
-	print('available CanHardware ports')
-	can_ports = CanHardware.available_ports()
-	for port in can_ports:
-		print(f'    {port.description()}')
-
-	print('creating hardware')
-	hardware = KLineHardware(ports[0].port)
-	transport = Kwp2000OverKLineTransport(hardware, tx_id=0x11, rx_id=0xf1)
+	device = find_device(port, {Bus.KLINE}) if port else devices[0]
+	print(f'creating K-Line channel on {device.description()}')
+	channel = device.kline()
+	transport = Kwp2000OverKLineTransport(channel, tx_id=0x11, rx_id=0xf1)
 	kwp = kwp2000.Kwp2000Protocol(transport)
 	
 	print('fast init')
@@ -59,13 +55,16 @@ def main() -> None:
 	packets = transport.buffer_dump()
 	print('\n'.join([str(x) for x in packets]))
 
+	kwp.close()
+
 if __name__ == '__main__':
 	parser = argparse.ArgumentParser()
 	parser.add_argument('-v', '--verbose', action='count', default=0)
+	parser.add_argument('-p', '--port', help='e.g. /dev/ttyUSB0 or COM3, first found if not given')
 	args = parser.parse_args()
 
 	levels = [logging.WARNING, logging.INFO, logging.DEBUG]
 	level = levels[min(args.verbose, len(levels) - 1)]  # cap to last level index
 	logging.basicConfig(level=level)
 
-main()
+	main(args.port)

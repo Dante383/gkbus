@@ -6,25 +6,19 @@ Automotive diagnostic protocols library powering the `GKFlasher <https://github.
 .. code-block:: python
     :linenos:
 
-    from gkbus.hardware import CanHardware, KLineHardware
+    from gkbus.device import Bus, discover
     from gkbus.protocol import kwp2000
     from gkbus.transport import Kwp2000OverKLineTransport
 
-    print('available KLineHardware ports')
-    ports = KLineHardware.available_ports()
-    for port in ports:
-    	print(f'    {port.description()}')
+    print('available devices')
+    for device in discover():
+    	print(f'    {device.description()}')
 
-    print('available CanHardware ports')
-    can_ports = CanHardware.available_ports()
-    for port in can_ports:
-    	print(f'    {port.description()}')
-
-    print('creating hardware')
-    hardware = KLineHardware(ports[0].port)
-    transport = Kwp2000OverKLineTransport(hardware, tx_id=0x11, rx_id=0xf1)
+    device = discover({Bus.KLINE})[0] # or find_device('/dev/ttyUSB0')
+    channel = device.kline() # for CAN: device.canbus() and Kwp2000OverCanTransport
+    transport = Kwp2000OverKLineTransport(channel, tx_id=0x11, rx_id=0xf1)
     kwp = kwp2000.Kwp2000Protocol(transport)
-    	
+
     print('fast init')
     init_success = kwp.init(kwp2000.commands.StartCommunication())
     print('fast init : {}'.format(init_success))
@@ -32,6 +26,8 @@ Automotive diagnostic protocols library powering the `GKFlasher <https://github.
     print('executing ReadEcuIdentification: 0x8c - bootloader version')
     response = kwp.execute(kwp2000.commands.ReadEcuIdentification(0x8c))
     print(response)
+
+    kwp.close()
 
 
 Supported protocols
@@ -53,7 +49,7 @@ Supported hardware
     * - K-Line (ISO 9141-2/14230-1)
       - Basically any native serial port. Genuine FTDI adapters work best, knockoff FTDI and CH340 are also tested
     * - CAN bus
-      - On Linux, anything that shows up as a native CAN network interface. Kernel ISO-TP module is used when available. On Windows, while everything supported by python-can should work, it was not tested. 
+      - On Linux, anything that shows up as a SocketCAN network interface, using the kernel ISO-TP module. On Windows, PCAN, Vector, slcan and GS-USB (CANable) adapters through python-can. Other python-can interfaces can be used with ``find_device('interface:channel')``
 
 Installing 
 ===========
@@ -67,7 +63,11 @@ $ python -m pip install gkbus
 API Reference available on [Read the Docs](https://gkbus.readthedocs.io)
 ========================================================================
 
-.. automodule:: gkbus.hardware
+.. automodule:: gkbus.device
+    :members:
+    :imported-members:
+
+.. automodule:: gkbus.channel
     :members:
     :imported-members:
 
@@ -82,7 +82,12 @@ API Reference available on [Read the Docs](https://gkbus.readthedocs.io)
 Overview
 =========
 
-GKBus operates on three layers: hardware, transport, protocol.
+GKBus operates on these layers:
+
+- Device - the physical adapter. Find them with ``discover()``, or create one from a port name with ``find_device()``
+- Channel - one bus on a device, ``device.kline()`` or ``device.canbus()``. Reads and writes bytes (K-Line) or frames (CAN)
+- Transport - turns protocol PDUs into what goes over the channel (K-Line framing, ISO-TP). Opens the channel if it isn't open yet and then closes it too - a channel you opened yourself stays open
+- Protocol - KWP2000, CCP
 [...]
 
 Indices and tables

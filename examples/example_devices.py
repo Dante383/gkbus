@@ -10,10 +10,9 @@ import argparse
 import logging
 
 import gkbus
-from gkbus.hardware import CanHardware, KLineHardware
+from gkbus.device import discovery
 from gkbus.protocol import kwp2000
 from gkbus.transport import Kwp2000OverKLineTransport
-from gkbus.device import discovery
 
 def main() -> None:
 	print('available kline devices')
@@ -28,11 +27,11 @@ def main() -> None:
 
 	kline_device = kline_devices[0]
 
-	print(f'creating kline hardware from {kline_device.description()}')
+	print(f'creating kline channel from {kline_device.description()}')
 
-	hardware = kline_device.kline()
-	hardware.open()
-	transport = Kwp2000OverKLineTransport(hardware, tx_id=0x11, rx_id=0xf1)
+	channel = kline_device.kline()
+	channel.open()
+	transport = Kwp2000OverKLineTransport(channel, tx_id=0x11, rx_id=0xf1)
 	kwp = kwp2000.Kwp2000Protocol(transport)
 	
 	print('fast init')
@@ -62,6 +61,11 @@ def main() -> None:
 	print('dumping the buffer')
 	packets = transport.buffer_dump()
 	print('\n'.join([str(x) for x in packets]))
+
+	# we opened the channel ourselves, so the transport leaves it open - closing the device
+	# closes every channel it handed out
+	kwp.close()
+	kline_device.close()
 
 if __name__ == '__main__':
 	parser = argparse.ArgumentParser()

@@ -16,7 +16,8 @@ import argparse
 import logging
 from dataclasses import dataclass
 
-from gkbus.hardware import CanFilter, CanHardware
+from gkbus.channel import CanFilter
+from gkbus.device import Bus, discover
 from gkbus.protocol import ccp
 from gkbus.transport import CcpOverCanTransport, PacketDirection, RawPacket, TransportABC
 
@@ -53,14 +54,14 @@ def dump_buffer (transport: TransportABC) -> None:
 	print('\n'.join([packet2hex(x) for x in packets]))
 
 def main() -> None:
-	print('Available CanHardware ports:')
-	can_ports = CanHardware.available_ports()
-	for port in can_ports:
-		print(f'    {port.description()}')
+	print('Available CAN bus devices:')
+	devices = discover({Bus.CANBUS})
+	for device in devices:
+		print(f'    {device.description()}')
 
-	print('Creating hardware with tx_id={}, rx_id={}'.format(hex(CAN_TX_ID), hex(CAN_RX_ID)))
-	hardware = CanHardware(can_ports[0].port)
-	transport = CcpOverCanTransport(hardware, tx_id=CAN_TX_ID, rx_id=CAN_RX_ID)
+	print('Creating CAN bus channel with tx_id={}, rx_id={}'.format(hex(CAN_TX_ID), hex(CAN_RX_ID)))
+	channel = devices[0].canbus()
+	transport = CcpOverCanTransport(channel, tx_id=CAN_TX_ID, rx_id=CAN_RX_ID)
 	transport.init()
 	
 	ccp_client = ccp.CcpProtocol(transport)
@@ -138,18 +139,13 @@ def main() -> None:
 	))
 
 	
-	print('\nRestarting the CAN interface to include DAQ identifiers in the rx filter')
-	hardware.close()
-	
-	# this is a really dirty way of doing that, using private properties 
-	# that might change at any time. not recommended. @todo add proper filter api to CAN hardware
+	print('\nAdding DAQ identifiers to the rx filter')
 	can_filters = [CanFilter(can_id=CAN_RX_ID, can_mask=0x7ff)]
 	print('\nActive DAQ entries:')
 	for entry in daq_entries:
 		can_filters.append(CanFilter(can_id=entry.assigned_can_id, can_mask=0x7ff))
 		print(entry)
-	hardware.set_filters(can_filters)
-	transport.init()
+	channel.set_filters(can_filters)
 
 	print('\nFetching DAQ entries value until CTRL+C')
 
@@ -160,7 +156,7 @@ def main() -> None:
 
 	try:
 		while True:
-			frame = hardware.read(length=8)
+			frame = channel.recv(timeout=1)
 			entry_values[frame.identifier] = frame.data
 			
 			formatted = ''
@@ -171,6 +167,7 @@ def main() -> None:
 		pass
 	
 	dump_buffer(transport)
+	transport.close()
 
 if __name__ == '__main__':
 	parser = argparse.ArgumentParser()

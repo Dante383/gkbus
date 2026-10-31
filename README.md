@@ -11,12 +11,11 @@ print('available devices')
 for device in discover():
 	print(f'    {device.description()}')
 
-print('creating hardware')
-device = discover({Bus.KLINE})[0]
-hardware = device.kline() # for CAN: discover({Bus.CANBUS}) and device.canbus()
-transport = Kwp2000OverKLineTransport(hardware, tx_id=0x11, rx_id=0xf1)
+device = discover({Bus.KLINE})[0] # or find_device('/dev/ttyUSB0')
+channel = device.kline() # for CAN: device.canbus() and Kwp2000OverCanTransport
+transport = Kwp2000OverKLineTransport(channel, tx_id=0x11, rx_id=0xf1)
 kwp = kwp2000.Kwp2000Protocol(transport)
-	
+
 print('fast init')
 init_success = kwp.init(kwp2000.commands.StartCommunication())
 print('fast init : {}'.format(init_success))
@@ -32,7 +31,20 @@ response = kwp.execute(
 		)
 	)
 print(response)
+
+kwp.close()
 ```
+
+## Layers
+
+- **Device** - the physical adapter (KKL cable, SocketCAN interface, PCAN, ...). Find them with
+  `discover()`, or create one from a port name with `find_device()`
+- **Channel** - one bus on a device, `device.kline()` or `device.canbus()`. Reads and writes
+  bytes (K-Line) or frames (CAN)
+- **Transport** - turns protocol PDUs into what goes over the channel (K-Line framing, ISO-TP).
+  Opens the channel if it isn't open yet and then closes it too - a channel you opened yourself
+  stays open, so you can hand it from one transport to the next
+- **Protocol** - KWP2000, CCP
 
 ## Supported protocols
 
