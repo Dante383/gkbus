@@ -1,4 +1,9 @@
+import errno
+import os
+
+import pyroute2
 import pytest
+from pyroute2 import NetlinkError
 from serial.tools.list_ports_common import ListPortInfo
 
 from gkbus.device import (
@@ -16,6 +21,7 @@ from gkbus.exceptions import (
 	ChannelInUseException,
 	ChannelNotSupportedException,
 	DeviceException,
+	OpeningChannelException,
 )
 
 
@@ -108,3 +114,79 @@ def test_find_device (can_interfaces: object) -> None:
 	assert isinstance(find_device('can0', buses={Bus.KLINE}), SerialKLineDevice)
 	with pytest.raises(DeviceException):
 		find_device('/dev/ttyUSB0', buses={Bus.CANBUS})
+
+class FakeNetlink:
+	'''
+	pyroute2.IPRoute with one CAN interface. Without permission, changing the link fails
+	like it does for a user without CAP_NET_ADMIN
+	'''
+
+	def __init__ (self, up: bool, bitrate: int = 500_000, error: int | None = None) -> None:
+		self.up, self.bitrate, self.error = up, bitrate, error
+		self.changes: list[dict] = []
+
+	def __call__ (self) -> 'FakeNetlink':
+		return self
+
+	def __enter__ (self) -> 'FakeNetlink':
+		return self
+
+	def __exit__ (self, *args: object) -> None:
+		pass
+
+	def link_lookup (self, ifname: str) -> list[int]:
+		return [7]
+
+	def get_links (self, index: int) -> list['FakeNetlink']:
+		return [self]
+
+	def __getitem__ (self, key: str) -> int:
+		assert key == 'flags'
+		return 1 if self.up else 0
+
+	def get (self, path: tuple) -> object:
+		return {
+			('linkinfo', 'kind'): 'can',
+			('linkinfo', 'data', 'can_bittiming'): {'bitrate': self.bitrate},
+		}.get(path)
+
+	def link (self, command: str, index: int, **kwargs: object) -> None:
+		if self.error is not None:
+			raise NetlinkError(self.error, os.strerror(self.error))
+		self.changes.append(kwargs)
+
+def open_socketcan (monkeypatch: pytest.MonkeyPatch, netlink: FakeNetlink) -> SocketCanChannel:
+	monkeypatch.setattr(pyroute2, 'IPRoute', netlink)
+	channel = SocketCanChannel('can0', bitrate=500_000)
+	channel.open()
+	return channel
+
+def test_socketcan_resets_link (monkeypatch: pytest.MonkeyPatch) -> None:
+	netlink = FakeNetlink(up=True)
+	channel = open_socketcan(monkeypatch, netlink)
+	assert netlink.changes == [
+		{'state': 'down'},
+		{'kind': 'can', 'can_bittiming': {'bitrate': 500_000}},
+		{'state': 'up'},
+	]
+	channel.close()
+	assert netlink.changes[-1] == {'state': 'down'}
+
+def test_socketcan_without_permission_uses_link_as_is (monkeypatch: pytest.MonkeyPatch) -> None:
+	netlink = FakeNetlink(up=True, error=errno.EPERM)
+	channel = open_socketcan(monkeypatch, netlink)
+	assert channel.is_open()
+	# left up for whoever set it up
+	channel.close()
+	assert not channel.is_open()
+
+@pytest.mark.parametrize('netlink, message', [
+	(FakeNetlink(up=False, error=errno.EPERM), 'can0 is down'),
+	(FakeNetlink(up=True, bitrate=250_000, error=errno.EPERM), 'can0 runs at 250000'),
+	(FakeNetlink(up=True, error=errno.EINVAL), 'Configuring can0 failed'),
+])
+def test_socketcan_open_fails (
+	monkeypatch: pytest.MonkeyPatch, netlink: FakeNetlink, message: str,
+) -> None:
+	with pytest.raises(OpeningChannelException, match='^' + message):
+		open_socketcan(monkeypatch, netlink)
