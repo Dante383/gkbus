@@ -7,7 +7,7 @@ from .can_channel import CanChannel
 from .can_frame import CanFilter, CanFrame
 from .channel_abc import ChannelABC
 from .isotp_link import IsoTpLink, IsoTpParams, SoftwareIsoTpLink
-from .kline_channel import KLineChannel
+from .kline_channel import KLineChannel, KLineTiming
 
 __all__ = [
 	'CanChannel',
@@ -17,5 +17,6 @@ __all__ = [
 	'IsoTpLink',
 	'IsoTpParams',
 	'KLineChannel',
+	'KLineTiming',
 	'SoftwareIsoTpLink',
 ]

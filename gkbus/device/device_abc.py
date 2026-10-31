@@ -3,7 +3,7 @@ from collections.abc import Callable
 from enum import Enum
 from typing import Self, TypeVar
 
-from ..channel import CanChannel, CanFilter, ChannelABC, KLineChannel
+from ..channel import CanChannel, CanFilter, ChannelABC, KLineChannel, KLineTiming
 from ..exceptions import ChannelInUseException, ChannelNotSupportedException
 
 T = TypeVar('T', bound=ChannelABC)
@@ -53,10 +53,13 @@ class DeviceABC(ABC):
 		self._channels.clear()
 		self._opened = False
 
-	def kline (self, baudrate: int = 10400) -> KLineChannel:
+	def kline (self, baudrate: int = 10400, timing: KLineTiming | None = None) -> KLineChannel:
 		'''
 		Get the K-Line channel of this device. Opens the device (not the channel) if it wasn't open.
 		The channel isn't opened - open it yourself, or let the transport do it
+
+		:param timing: ISO 14230 bus timing, for devices that time the bus themselves.
+			ISO 14230 defaults if not provided
 
 		:raises ChannelNotSupportedException: the device doesn't support K-Line
 		'''

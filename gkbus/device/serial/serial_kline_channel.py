@@ -3,7 +3,7 @@ import time
 
 import serial
 
-from ...channel import KLineChannel
+from ...channel import KLineChannel, KLineTiming
 from ...exceptions import ChannelException, OpeningChannelException, TimeoutException
 from ...utils import ms_to_ns, ns_to_ms
 
@@ -24,11 +24,14 @@ class SerialKLineChannel(KLineChannel):
 	Any pyserial URL works as the port too, e.g. loop:// for testing
 	'''
 
-	def __init__ (self, port: str, baudrate: int = 10400) -> None:
+	def __init__ (
+		self, port: str, baudrate: int = 10400, timing: KLineTiming | None = None,
+	) -> None:
 		'''
 		:param port: serial port, for example /dev/ttyUSB0 or COM3
+		:param timing: kept, not used yet - the timing is up to the serial adapter
 		'''
-		super().__init__(baudrate)
+		super().__init__(baudrate, timing)
 		self.port = port
 		self._serial: serial.SerialBase | None = None
 

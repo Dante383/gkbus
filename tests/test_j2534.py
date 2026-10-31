@@ -5,19 +5,21 @@ import ctypes
 import dataclasses
 import json
 import logging
+import math
 import os
 import struct
 from collections.abc import Iterator
 
 import pytest
 
-from gkbus.channel import CanFilter, CanFrame, IsoTpParams
-from gkbus.device import Bus, J2534Device, discovery
-from gkbus.device.j2534 import j2534_device, j2534_isotp_link, registry
+from gkbus.channel import CanFilter, CanFrame, IsoTpParams, KLineTiming
+from gkbus.device import Bus, J2534Device, J2534KLineChannel, discovery
+from gkbus.device.j2534 import j2534_device, j2534_isotp_link, j2534_kline_channel, registry
 from gkbus.device.j2534 import library as j2534_library
 from gkbus.device.j2534.constants import (
 	CAN_29BIT_ID,
 	CAN_ID_BOTH,
+	ISO9141_NO_CHECKSUM,
 	ISO15765_FRAME_PAD,
 	Config,
 	FilterType,
@@ -41,6 +43,7 @@ from gkbus.exceptions import (
 	OpeningChannelException,
 	TimeoutException,
 )
+from gkbus.transport import Kwp2000OverKLineTransport
 
 from .fakes import FakeJ2534Library
 
@@ -604,3 +607,188 @@ def test_isotp_link_open_errors (openport: J2534Device, adapter: FakeJ2534Librar
 	with pytest.raises(J2534Error):
 		link.open()
 	assert not link.is_open() and 6 not in adapter.channels
+
+# --- K-Line ---
+
+def kwp_frame (data: bytes, target: int = 0xF1, source: int = 0x10) -> bytes:
+	frame = bytes([0x80 + len(data), target, source]) + data
+	return frame + bytes([sum(frame) & 0xFF])
+
+def kwp_ecu (message: J2534Message) -> list[J2534Message]:
+	'''
+	Answers every K-Line request positively with the request's data, in two messages -
+	the adapter splits a response wherever the ECU pauses
+	'''
+	if message.protocol not in FakeJ2534Library.KLINE_PROTOCOLS:
+		return []
+	data = message.data[3:-1]
+	response = kwp_frame(bytes([data[0] + 0x40]) + data[1:])
+	return [
+		J2534Message(message.protocol, response[:2]),
+		J2534Message(message.protocol, response[2:]),
+	]
+
+@pytest.fixture
+def kline_adapter (adapter: FakeJ2534Library) -> FakeJ2534Library:
+	adapter.ecu = kwp_ecu
+	return adapter
+
+def test_kline_kwp2000 (openport: J2534Device, kline_adapter: FakeJ2534Library) -> None:
+	channel = openport.kline()
+	transport = Kwp2000OverKLineTransport(channel, 0x10, 0xF1)
+	transport.init(b'\x81')
+	assert kline_adapter.calls_to('connect') == [(Protocol.ISO14230, ISO9141_NO_CHECKSUM, 10400)]
+	assert kline_adapter.channels[4].filters == {1: (FilterType.PASS, b'\x00', b'\x00', None, 0)}
+	assert kline_adapter.channels[4].config == {
+		Config.LOOPBACK: 0, Config.P1_MAX: 40, Config.P3_MIN: 120, Config.P4_MIN: 0,
+	}
+	assert kline_adapter.calls_to('fast_init') == [(4, transport.build_payload(b'\x81'))]
+
+	assert transport.send_read_pdu(b'\x1A\x90') == b'\x5A\x90'
+	# the whole frame in one message, checksum and all - nothing echoed
+	assert kline_adapter.written[-1].data == transport.build_payload(b'\x1A\x90')
+	assert kline_adapter.written[-1].protocol == Protocol.ISO14230
+	# P3, 6 bytes at 10400 baud, margin
+	assert kline_adapter.calls_to('write')[-1] == (4, math.ceil(60 + 6 * 10 * 1000 / 10400) + 1000)
+
+def test_kline_byte_stream (openport: J2534Device, kline_adapter: FakeJ2534Library) -> None:
+	channel = openport.kline()
+	channel.open()
+	channel.write(kwp_frame(b'\x3E', target=0x10, source=0xF1))
+	# across the adapter's messages, leftovers kept for the next read
+	assert channel.read(1, 0.1) == b'\x81'
+	assert channel.read(3, 0.1) == b'\xF1\x10\x7E'
+	assert channel.read(1, 0.1) == bytes([sum(b'\x81\xF1\x10\x7E') & 0xFF])
+	# what arrived of a frame that didn't arrive in time is gone, like on a serial port
+	channel.write(kwp_frame(b'\x3E', target=0x10, source=0xF1))
+	with pytest.raises(TimeoutException):
+		channel.read(10, 0.01)
+	with pytest.raises(TimeoutException):
+		channel.read(1, 0)
+	# echoes are consumed
+	kline_adapter.channels[4].config[Config.LOOPBACK] = 1
+	channel.write(kwp_frame(b'\x3E', target=0x10, source=0xF1))
+	assert channel.read(5, 0.1) == kwp_frame(b'\x7E')
+
+	channel.write(kwp_frame(b'\x3E', target=0x10, source=0xF1))
+	channel.reset_buffers()
+	assert kline_adapter.calls_to('clear_rx_buffer')[-1] == (4,)
+	assert kline_adapter.calls_to('clear_tx_buffer')[-1] == (4,)
+	with pytest.raises(TimeoutException):
+		channel.read(1, 0)
+
+	channel.close()
+	assert 4 not in kline_adapter.channels
+	with pytest.raises(ChannelException, match='not open'):
+		channel.read(1, 0)
+
+def test_kline_fast_init (openport: J2534Device, kline_adapter: FakeJ2534Library) -> None:
+	channel = openport.kline()
+	channel.open()
+	start_communication = kwp_frame(b'\x81', target=0x10, source=0xF1)
+	# the response is returned, and never read even if the adapter queued it too
+	kline_adapter.fast_init_queues_response = True
+	assert channel.fast_init(start_communication) == b'\x81\xF1'
+	with pytest.raises(TimeoutException):
+		channel.read(1, 0)
+
+	# an ECU not answering is no error
+	kline_adapter.ecu = lambda message: []
+	assert channel.fast_init(start_communication) == b''
+	# the adapter failing is
+	kline_adapter.fail['fast_init'] = Status.ERR_FAILED
+	with pytest.raises(J2534Error):
+		channel.fast_init(start_communication)
+
+def test_kline_set_baudrate (
+	openport: J2534Device, kline_adapter: FakeJ2534Library, monkeypatch: pytest.MonkeyPatch,
+) -> None:
+	sleeps: list[float] = []
+	monkeypatch.setattr(j2534_kline_channel.time, 'sleep', sleeps.append)
+	channel = openport.kline(baudrate=9600, timing=KLineTiming(p3_min=20))
+	channel.set_baudrate(10400)
+	channel.open()
+	assert kline_adapter.calls_to('connect') == [(Protocol.ISO14230, ISO9141_NO_CHECKSUM, 10400)]
+
+	channel.write(kwp_frame(b'\x10\x85\x14', target=0x10, source=0xF1))
+	assert channel.read(7, 0.1)[3:5] == b'\x50\x85'
+	# changed on the open channel, like the OpenPort does
+	channel.set_baudrate(125_000)
+	assert channel.get_baudrate() == 125_000
+	assert kline_adapter.channels[4].config[Config.DATA_RATE] == 125_000
+	assert kline_adapter.calls_to('disconnect') == []
+	assert sleeps == []
+
+	# adapters that can't, reopen the channel at the new rate and set it up like before
+	kline_adapter.read_only.add((Protocol.ISO14230, Config.DATA_RATE))
+	channel.write(kwp_frame(b'\x3E', target=0x10, source=0xF1))
+	assert channel.read(5, 0.1) == kwp_frame(b'\x7E')
+	channel.set_baudrate(10400)
+	assert kline_adapter.calls_to('disconnect') == [(4,)]
+	assert kline_adapter.calls_to('connect')[-1] == (Protocol.ISO14230, ISO9141_NO_CHECKSUM, 10400)
+	assert channel.get_baudrate() == 10400
+	assert kline_adapter.channels[4].config == {
+		Config.LOOPBACK: 0, Config.P1_MAX: 40, Config.P3_MIN: 40, Config.P4_MIN: 0,
+	}
+	assert len(kline_adapter.channels[4].filters) == 1
+	# P3 since the ECU's response kept, the new channel doesn't know about it
+	assert len(sleeps) == 1 and 0 < sleeps[0] <= 0.02
+	channel.write(kwp_frame(b'\x3E', target=0x10, source=0xF1))
+	assert channel.read(5, 0.1) == kwp_frame(b'\x7E')
+
+def test_kline_set_timing (openport: J2534Device, kline_adapter: FakeJ2534Library) -> None:
+	channel = openport.kline()
+	channel.set_timing(KLineTiming(p1_max=5, p3_min=0.5, p4_min=1))
+	assert kline_adapter.calls_to('set_config') == []
+	channel.open()
+	channel.set_timing(KLineTiming(p1_max=2.5, p3_min=0, p4_min=0))
+	assert channel.get_timing() == KLineTiming(p1_max=2.5, p3_min=0, p4_min=0)
+	assert [x[1:] for x in kline_adapter.calls_to('set_config')] == [
+		(Config.LOOPBACK, 0), (Config.P1_MAX, 10), (Config.P3_MIN, 1), (Config.P4_MIN, 2),
+		(Config.P1_MAX, 5), (Config.P3_MIN, 0), (Config.P4_MIN, 0),
+	]
+
+def test_kline_pins (openport: J2534Device, kline_adapter: FakeJ2534Library) -> None:
+	# the OpenPort's L line, no J2534-2 pin switching
+	channel = J2534KLineChannel(openport, pin=ObdPin.L_LINE)
+	channel.open()
+	assert [x[0] for x in kline_adapter.calls_to('connect')] == [
+		Protocol.ISO14230_PS, Protocol.ISO14230_CH2,
+	]
+	channel.write(kwp_frame(b'\x3E', target=0x10, source=0xF1))
+	assert channel.read(5, 0.1) == kwp_frame(b'\x7E')
+	channel.close()
+
+	with pytest.raises(ChannelNotSupportedException, match='can\'t do K-Line on OBD pin 9'):
+		J2534KLineChannel(openport, pin=ObdPin.PIN_9).open()
+	assert kline_adapter.channels == {}
+
+def test_kline_pin_switching (kline_adapter: FakeJ2534Library) -> None:
+	'''
+	A J2534-2 adapter switches pins, others can't do anything but pin 7
+	'''
+	device = J2534Device(GENERIC_INFO)
+	kline_adapter.channel_ids[Protocol.ISO14230_PS] = 9
+	J2534KLineChannel(device, pin=ObdPin.PIN_12).open()
+	assert kline_adapter.channels[9].config[Config.J1962_PINS] == 0x0C00
+
+	# switching fails: no other way on a generic adapter
+	kline_adapter.read_only.add((Protocol.ISO14230_PS, Config.J1962_PINS))
+	kline_adapter.channels.clear()
+	with pytest.raises(ChannelNotSupportedException, match='can\'t do K-Line on OBD pin 15'):
+		J2534KLineChannel(device, pin=ObdPin.L_LINE).open()
+	assert kline_adapter.channels == {}
+	device.close()
+
+def test_kline_needs_kline_library (adapter: FakeJ2534Library) -> None:
+	can_only = dataclasses.replace(GENERIC_INFO, buses=frozenset({Bus.CANBUS}))
+	with pytest.raises(ChannelNotSupportedException, match='does not support kline'):
+		J2534Device(can_only).kline()
+
+def test_kline_and_can_together (openport: J2534Device, kline_adapter: FakeJ2534Library) -> None:
+	kline, can = openport.kline(), openport.canbus()
+	kline.open()
+	can.open()
+	assert set(kline_adapter.channels) == {4, 5}
+	openport.close()
+	assert not kline.is_open() and not can.is_open() and not kline_adapter.device_open

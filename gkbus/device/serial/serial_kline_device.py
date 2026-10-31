@@ -4,6 +4,7 @@ from typing import Self
 import serial.tools.list_ports
 from serial.tools.list_ports_common import ListPortInfo
 
+from ...channel import KLineTiming
 from ..device_abc import Bus, DeviceABC
 from ..python_can.backends import SLCAN_USB_IDS
 from .serial_kline_channel import SerialKLineChannel
@@ -33,14 +34,19 @@ class SerialKLineDevice(DeviceABC):
 		self.manufacturer = manufacturer
 		self.serial_number = serial_number
 
-	def kline (self, baudrate: int = 10400) -> SerialKLineChannel:
+	def kline (
+		self, baudrate: int = 10400, timing: KLineTiming | None = None,
+	) -> SerialKLineChannel:
 		'''
 		Get the K-Line channel. Opens the device (not the channel) if it wasn't open.
 		The channel isn't opened - open it yourself, or let the transport do it
 
+		:param timing: kept on the channel, the serial channel doesn't use it yet
 		:raises ChannelInUseException: the K-Line channel handed out earlier is still open
 		'''
-		return self._hand_out(Bus.KLINE, lambda: SerialKLineChannel(self.port, baudrate=baudrate))
+		return self._hand_out(
+			Bus.KLINE, lambda: SerialKLineChannel(self.port, baudrate=baudrate, timing=timing),
+		)
 
 	def description (self) -> str:
 		details = ' '.join([x for x in [self.manufacturer, self.serial_number] if x])

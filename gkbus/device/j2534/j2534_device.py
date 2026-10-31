@@ -1,7 +1,7 @@
 import logging
 from typing import TYPE_CHECKING, Self
 
-from ...channel import CanFilter
+from ...channel import CanFilter, KLineTiming
 from ...exceptions import ChannelException, ChannelNotSupportedException, DeviceException
 from ..device_abc import Bus, DeviceABC
 from .constants import Status
@@ -10,6 +10,7 @@ from .registry import J2534LibraryInfo, find_libraries, find_library
 
 if TYPE_CHECKING:
 	from .j2534_can_channel import J2534CanChannel
+	from .j2534_kline_channel import J2534KLineChannel
 
 logger = logging.getLogger(__name__)
 
@@ -102,6 +103,24 @@ class J2534Device(DeviceABC):
 					library.close(device_id)
 				except J2534Error as e:
 					logger.warning('Closing {} failed: {}'.format(self.library.name, e))
+
+	def kline (
+		self, baudrate: int = 10400, timing: KLineTiming | None = None,
+	) -> 'J2534KLineChannel':
+		'''
+		Get the K-Line channel. Opens the device (not the channel) if it wasn't open.
+		The channel isn't opened - open it yourself, or let the transport do it.
+		The adapter keeps to the timing itself
+
+		:raises ChannelNotSupportedException: the library doesn't do K-Line
+		:raises ChannelInUseException: the K-Line channel handed out earlier is still open
+		'''
+		from .j2534_kline_channel import J2534KLineChannel
+
+		self._require(Bus.KLINE)
+		return self._hand_out(
+			Bus.KLINE, lambda: J2534KLineChannel(self, baudrate=baudrate, timing=timing),
+		)
 
 	def canbus (
 		self,

@@ -16,6 +16,7 @@ from gkbus.device.j2534.constants import (
 	TX_DONE,
 	TX_MSG_TYPE,
 	VOLTAGE_OFF,
+	Config,
 	FilterType,
 	Protocol,
 	Status,
@@ -147,6 +148,9 @@ class FakeJ2534Library:
 		Protocol.ISO9141: 3, Protocol.ISO14230: 4, Protocol.CAN: 5, Protocol.ISO15765: 6,
 		Protocol.ISO14230_CH2: 8,
 	}
+	KLINE_PROTOCOLS = frozenset({
+		Protocol.ISO9141, Protocol.ISO14230, Protocol.ISO14230_CH2, Protocol.ISO14230_PS,
+	})
 
 	def __init__ (
 		self,
@@ -160,6 +164,14 @@ class FakeJ2534Library:
 		self.channels: dict[int, FakeJ2534Channel] = {}
 		self.written: list[J2534Message] = []
 		self.grounded: set[int] = set()
+		#: protocol: channel id, add ISO14230_PS for an adapter that switches pins
+		self.channel_ids = dict(self.CHANNEL_IDS)
+		#: (protocol, parameter) SET_CONFIG refuses, e.g. an adapter that can't change the rate
+		#: of an open channel. The OpenPort can
+		self.read_only: set[tuple[int, int]] = set()
+		#: whether a fast init's response is also queued, besides being returned. The OpenPort's
+		#: isn't
+		self.fast_init_queues_response = False
 		self._filter_ids = 0
 
 	def _call (self, name: str, *args: object) -> None:
@@ -190,9 +202,9 @@ class FakeJ2534Library:
 
 	def connect (self, device_id: int, protocol: int, flags: int, baudrate: int) -> int:
 		self._call('connect', protocol, flags, baudrate)
-		if protocol not in self.CHANNEL_IDS:
+		if protocol not in self.channel_ids:
 			raise error_for('PassThruConnect', Status.ERR_INVALID_PROTOCOL_ID)
-		channel_id = self.CHANNEL_IDS[protocol]
+		channel_id = self.channel_ids[protocol]
 		if channel_id in self.channels:
 			raise error_for('PassThruConnect', Status.ERR_CHANNEL_IN_USE)
 		self.channels[channel_id] = FakeJ2534Channel(protocol, flags, baudrate)
@@ -226,6 +238,10 @@ class FakeJ2534Library:
 			if channel.protocol == Protocol.CAN:
 				# our own frame, seen on the bus
 				self.receive(channel_id, J2534Message(Protocol.CAN, message.data, rx_status=wide))
+			if channel.protocol in self.KLINE_PROTOCOLS and channel.config.get(Config.LOOPBACK):
+				channel.queue.append(J2534Message(
+					channel.protocol, message.data, rx_status=TX_MSG_TYPE,
+				))
 			for answer in self.ecu(message):
 				self.receive(channel_id, answer)
 
@@ -240,7 +256,20 @@ class FakeJ2534Library:
 			channel.queue.append(J2534Message(
 				message.protocol, message.data[:CAN_ID_SIZE], rx_status=START_OF_MESSAGE,
 			))
+		if channel.protocol in self.KLINE_PROTOCOLS:
+			channel.queue.append(J2534Message(message.protocol, b'', rx_status=START_OF_MESSAGE))
 		channel.queue.append(message)
+
+	def fast_init (self, channel_id: int, request: J2534Message) -> bytes:
+		self._call('fast_init', channel_id, request.data)
+		self._channel('PassThruIoctl(FAST_INIT)', channel_id)
+		answers = self.ecu(request)
+		if not answers:
+			raise error_for('PassThruIoctl(FAST_INIT)', Status.ERR_INIT_FAILED)
+		if self.fast_init_queues_response:
+			for answer in answers:
+				self.receive(channel_id, answer)
+		return answers[0].data
 
 	def start_msg_filter (
 		self,
@@ -282,11 +311,17 @@ class FakeJ2534Library:
 
 	def get_config (self, channel_id: int, parameter: int) -> int:
 		self._call('get_config', channel_id, parameter)
-		return self._channel('GET_CONFIG', channel_id).config.get(parameter, 0)
+		channel = self._channel('GET_CONFIG', channel_id)
+		if parameter == Config.DATA_RATE:
+			return channel.config.get(parameter, channel.baudrate)
+		return channel.config.get(parameter, 0)
 
 	def set_config (self, channel_id: int, parameter: int, value: int) -> None:
 		self._call('set_config', channel_id, parameter, value)
-		self._channel('SET_CONFIG', channel_id).config[parameter] = value
+		channel = self._channel('SET_CONFIG', channel_id)
+		if (channel.protocol, parameter) in self.read_only:
+			raise error_for('PassThruIoctl(SET_CONFIG)', Status.ERR_NOT_SUPPORTED)
+		channel.config[parameter] = value
 
 	def read_vbatt (self, device_id: int) -> int:
 		self._call('read_vbatt')
