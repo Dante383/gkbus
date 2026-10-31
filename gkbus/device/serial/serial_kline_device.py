@@ -3,15 +3,15 @@ from typing import Self
 import serial.tools.list_ports
 from serial.tools.list_ports_common import ListPortInfo
 
-from ..hardware import KLineHardware
-from ..hardware.can_hardware import SLCAN_USB_IDS
-from .device_abc import Bus, DeviceABC
+from ..device_abc import Bus, DeviceABC
+from ..python_can.backends import SLCAN_USB_IDS
+from .serial_kline_channel import SerialKLineChannel
 
 
 class SerialKLineDevice(DeviceABC):
 	'''
 	K-Line adapter on a serial port (KKL cables and the like), through pyserial.
-	There's nothing to open on the device itself - the serial port is opened by the K-Line hardware
+	There's nothing to open on the device itself - the serial port is opened by the K-Line channel
 	'''
 
 	buses = frozenset({Bus.KLINE})
@@ -23,24 +23,21 @@ class SerialKLineDevice(DeviceABC):
 		serial_number: str | None = None,
 	) -> None:
 		'''
-		:param port: serial port, for example /dev/ttyUSB0 or COM3
+		:param port: serial port, for example /dev/ttyUSB0 or COM3. pyserial URLs work too
 		'''
 		super().__init__()
 		self.port = port
 		self.manufacturer = manufacturer
 		self.serial_number = serial_number
 
-	def kline (self, baudrate: int = 10400, timeout: float = 2) -> KLineHardware:
+	def kline (self, baudrate: int = 10400) -> SerialKLineChannel:
 		'''
-		Get K-Line hardware on this device. Opens the device (not the hardware) if it wasn't open.
-		The hardware isn't opened - open it yourself, or let the transport do it
+		Get the K-Line channel. Opens the device (not the channel) if it wasn't open.
+		The channel isn't opened - open it yourself, or let the transport do it
 
-		:raises ChannelInUseException: K-Line hardware handed out earlier is still open
+		:raises ChannelInUseException: the K-Line channel handed out earlier is still open
 		'''
-		return self._hand_out(
-			Bus.KLINE,
-			lambda: KLineHardware(self.port, baudrate=baudrate, timeout=timeout),
-		)
+		return self._hand_out(Bus.KLINE, lambda: SerialKLineChannel(self.port, baudrate=baudrate))
 
 	def description (self) -> str:
 		details = ' '.join([x for x in [self.manufacturer, self.serial_number] if x])
@@ -58,6 +55,13 @@ class SerialKLineDevice(DeviceABC):
 			for port in sorted(sorted(serial.tools.list_ports.comports()), key=cls._port_priority)
 			if (port.vid, port.pid) not in SLCAN_USB_IDS
 		]
+
+	@classmethod
+	def from_port (cls, port: str) -> Self | None:
+		'''
+		Anything can be a serial port, so this always succeeds - it's asked last
+		'''
+		return cls(port)
 
 	@staticmethod
 	def _port_priority (port: ListPortInfo) -> int:

@@ -1,28 +1,24 @@
 '''
-Devices - physical adapters, providing hardware for the buses they support
+Devices - physical adapters, handing out channels for the buses they support
 '''
 
 from .device_abc import Bus, DeviceABC
-from .device_exceptions import (
-	ChannelInUseException,
-	ChannelNotSupportedException,
-	DeviceException,
-	DeviceNotOpenException,
-)
-from .discovery import discover
-from .python_can_device import PythonCanDevice
-from .serial_kline_device import SerialKLineDevice
-from .socketcan_device import SocketCanDevice
+from .discovery import DEVICE_TYPES, discover, find_device
+from .python_can import PythonCanChannel, PythonCanDevice
+from .serial import SerialKLineChannel, SerialKLineDevice
+from .socketcan import KernelIsoTpLink, SocketCanChannel, SocketCanDevice
 
 __all__ = [
+	'DEVICE_TYPES',
 	'Bus',
-	'ChannelInUseException',
-	'ChannelNotSupportedException',
 	'DeviceABC',
-	'DeviceException',
-	'DeviceNotOpenException',
+	'KernelIsoTpLink',
+	'PythonCanChannel',
 	'PythonCanDevice',
+	'SerialKLineChannel',
 	'SerialKLineDevice',
+	'SocketCanChannel',
 	'SocketCanDevice',
 	'discover',
+	'find_device',
 ]

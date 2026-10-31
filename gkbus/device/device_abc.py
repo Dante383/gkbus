@@ -3,10 +3,10 @@ from collections.abc import Callable
 from enum import Enum
 from typing import Self, TypeVar
 
-from ..hardware import CanFilter, CanHardware, HardwareABC, KLineHardware
-from .device_exceptions import ChannelInUseException, ChannelNotSupportedException
+from ..channel import CanChannel, CanFilter, ChannelABC, KLineChannel
+from ..exceptions import ChannelInUseException, ChannelNotSupportedException
 
-T = TypeVar('T', bound=HardwareABC)
+T = TypeVar('T', bound=ChannelABC)
 
 
 class Bus(Enum):
@@ -17,23 +17,23 @@ class DeviceABC(ABC):
 	'''
 	Abstract device class. Device refers to the actual physical device you're using for
 	communication, reached through one particular access method (serial port, J2534 library,
-	SocketCAN, ...). A device hands out Hardware for every bus it supports. J2534 would support
-	KLineHardware and CanHardware, SerialKLineDevice only supports KLineHardware, etc.
+	SocketCAN, ...). A device hands out a channel for every bus it supports. J2534 would hand out
+	K-Line and CAN bus channels, SerialKLineDevice only a K-Line channel, etc.
 
 	Creating a device doesn't open anything, so instances returned by discover()
 	are safe to list and discard.
 	'''
 
-	#: buses this device type can provide hardware for
+	#: buses this device type can provide channels for
 	buses: frozenset[Bus] = frozenset()
 
 	def __init__ (self) -> None:
 		self._opened = False
-		self._hardware: dict[Bus, HardwareABC] = {}
+		self._channels: dict[Bus, ChannelABC] = {}
 
 	def open (self) -> bool:
 		'''
-		Open the device, so hardware can be requested from it.
+		Open the device, so channels can be requested from it.
 		Does nothing if the device is already open
 		'''
 		self._opened = True
@@ -44,19 +44,19 @@ class DeviceABC(ABC):
 
 	def close (self) -> None:
 		'''
-		Close the device and any hardware it handed out.
+		Close the device and any channels it handed out.
 		Does nothing if the device is already closed
 		'''
-		for hardware in self._hardware.values():
-			if hardware.is_open():
-				hardware.close()
-		self._hardware.clear()
+		for channel in self._channels.values():
+			if channel.is_open():
+				channel.close()
+		self._channels.clear()
 		self._opened = False
 
-	def kline (self, baudrate: int = 10400, timeout: float = 2) -> KLineHardware:
+	def kline (self, baudrate: int = 10400) -> KLineChannel:
 		'''
-		Get K-Line hardware on this device. Opens the device (not the hardware) if it wasn't open.
-		The hardware isn't opened - open it yourself, or let the transport do it
+		Get the K-Line channel of this device. Opens the device (not the channel) if it wasn't open.
+		The channel isn't opened - open it yourself, or let the transport do it
 
 		:raises ChannelNotSupportedException: the device doesn't support K-Line
 		'''
@@ -65,12 +65,11 @@ class DeviceABC(ABC):
 	def canbus (
 		self,
 		bitrate: int = 500_000,
-		timeout: float = 1,
 		filters: list[CanFilter] | None = None,
-	) -> CanHardware:
+	) -> CanChannel:
 		'''
-		Get CAN bus hardware on this device. Opens the device (not the hardware) if it wasn't open.
-		The hardware isn't opened - open it yourself, or let the transport do it
+		Get the CAN bus channel of this device. Opens the device (not the channel) if it wasn't
+		open. The channel isn't opened - open it yourself, or let the transport do it
 
 		:raises ChannelNotSupportedException: the device doesn't support CAN bus
 		'''
@@ -93,15 +92,25 @@ class DeviceABC(ABC):
 		:return: unopened device instances
 		'''
 
+	@classmethod
+	def from_port (cls, port: str) -> Self | None:
+		'''
+		Create the device from a port string, the way discovered devices identify themselves
+		(e.g. /dev/ttyUSB0, can0, pcan:PCAN_USBBUS1). Nothing is opened
+
+		:return: None if the port isn't one of this device type
+		'''
+		return None
+
 	def _hand_out (self, bus: Bus, create: Callable[[], T]) -> T:
 		'''
-		Open the device (not the hardware) if it wasn't open, create hardware for the bus
-		and keep track of it, so close() can shut it down later. The hardware is not opened
+		Open the device (not the channel) if it wasn't open, create the channel for the bus
+		and keep track of it, so close() can shut it down later. The channel is not opened
 
-		:param create: creates the hardware, called only if it can be handed out
-		:raises ChannelInUseException: hardware handed out earlier for this bus is still open
+		:param create: creates the channel, called only if it can be handed out
+		:raises ChannelInUseException: the channel handed out earlier for this bus is still open
 		'''
-		current = self._hardware.get(bus)
+		current = self._channels.get(bus)
 		if current is not None and current.is_open():
 			raise ChannelInUseException(
 				'{} on {} is already open'.format(bus.value, self.description())
@@ -109,9 +118,9 @@ class DeviceABC(ABC):
 		if not self.is_open():
 			self.open()
 
-		hardware = create()
-		self._hardware[bus] = hardware
-		return hardware
+		channel = create()
+		self._channels[bus] = channel
+		return channel
 
 	def __enter__ (self) -> Self:
 		self.open()

@@ -14,13 +14,10 @@ class ProtocolABC (ABC):
 
 	def open (self) -> bool:
 		'''
-		Initialize hardware/transport layers - get ready to interact.
+		Open the transport (and the channel, if it isn't open yet) - get ready to interact.
 		Does nothing if the transport is already open
 		'''
-		if not self.transport.is_open():
-			return self.transport.open()
-
-		return True
+		return self.transport.open()
 
 	def init (self) -> bool:
 		'''
@@ -35,10 +32,10 @@ class ProtocolABC (ABC):
 
 	def close (self) -> None:
 		'''
-		Shutdown the underlaying layers. Does nothing if the transport is already closed
+		Close the transport, and the channel if the transport opened it.
+		Does nothing if the transport is already closed
 		'''
-		if self.transport.is_open():
-			self.transport.close()
+		self.transport.close()
 
 	def set_transport (self, transport: TransportABC) -> Self:
 		'''
@@ -49,6 +46,3 @@ class ProtocolABC (ABC):
 		:param transport: Transport instance to replace current one with
 		'''
 		self.transport = transport
-
-	def __del__ (self) -> None:
-		self.close()

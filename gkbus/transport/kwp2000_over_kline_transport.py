@@ -1,61 +1,70 @@
 import logging
-import time
 
-from ..hardware.hardware_abc import HardwareABC, RawFrame, TimeoutException
-from .transport_abc import PacketDirection, RawPacket, TransportABC
+from ..channel import KLineChannel
+from ..exceptions import TimeoutException
+from .transport_abc import PacketDirection, TransportABC
 
 logger = logging.getLogger(__name__)
 
+#: how long to wait for each frame the ECU sends in response to fast init
+FAST_INIT_DRAIN_TIMEOUT = 0.4
+#: most frames drained after fast init
+FAST_INIT_DRAIN_FRAMES = 3
+
 class Kwp2000OverKLineTransport (TransportABC):
-	def __init__ (self, hardware: HardwareABC, tx_id: int, rx_id: int) -> None:
-		self.hardware: HardwareABC = hardware
-		self.tx_id, self.rx_id = tx_id, rx_id
+	'''
+	KWP2000 over K-Line (ISO 14230): every PDU is wrapped in a frame with a length byte,
+	target and source addresses and a checksum
+	'''
+
+	channel: KLineChannel
+
+	def __init__ (self, channel: KLineChannel, tx_id: int, rx_id: int, timeout: float = 2) -> None:
+		'''
+		:param channel: K-Line channel, e.g. from device.kline()
+		:param tx_id: target address (the ECU)
+		:param rx_id: source address (the tester)
+		:param timeout: seconds to wait for a response
+		'''
+		super().__init__(channel, tx_id, rx_id, timeout)
 
 	def send_pdu (self, pdu: bytes) -> int:
 		data = self.build_payload(pdu)
 
-		bytes_written = self._write(data)
-		self.buffer_push(RawPacket(direction=PacketDirection.OUTGOING, data=data, timestamp=int(time.time()*1000)))
+		self._write(data)
+		self._record(PacketDirection.OUTGOING, data)
 
-		return bytes_written
+		return len(pdu)
 
-	def read_pdu (self) -> bytes:
+	def read_pdu (self, timeout: float | None = None) -> bytes:
+		timeout = self._timeout(timeout)
 		frame = bytes()
 		data = bytes()
 
-		frame += self._read(4)
+		frame += self._read(4, timeout)
 
 		counter = frame[0]
-		tx_rx_id = frame[1:3]
 
-		if (counter == 0x80): # more than 127 bytes incoming, counter overflowed. counter is gonna come after IDs
+		# more than 127 bytes incoming, counter overflowed. counter is gonna come after IDs
+		if (counter == 0x80):
 			counter = frame[3]+1
 			logger.debug('More than 127 bytes incoming: {}'.format(counter))
 		else:
 			counter = counter-0x80
-			data += frame[3:4] # frame[3] == python would automatically convert it to int. frame[3:3] == byte slice 
+			# frame[3] == python would automatically convert it to int. frame[3:4] == byte slice
+			data += frame[3:4]
 
-		data_and_checksum = self._read(counter)
+		data_and_checksum = self._read(counter, timeout)
 		frame += data_and_checksum
 		data += data_and_checksum[:-1] # last byte is the checksum
 
-		self.buffer_push(RawPacket(direction=PacketDirection.INCOMING, data=frame, timestamp=int(time.time() * 1000)))
+		self._record(PacketDirection.INCOMING, frame)
 
-		return data
-
-	def _write (self, data: bytes) -> int:
-		logger.debug('K-Line sending: {}'.format(' '.join([hex(x) for x in list(data)])))
-		return self.hardware.write(RawFrame(identifier=0, data=data))
-
-	def _read (self, length: int) -> bytes:
-		logger.debug('K-Line trying to read {} bytes'.format(length))
-		data = self.hardware.read(length).data
-		logger.debug('K-Line success: {}'.format(' '.join([hex(x) for x in list(data)])))
 		return data
 
 	def init (self, init_pdu: bytes | None = None) -> bool:
 		'''
-		Bring up the socket if not opened already and, if a StartCommunication PDU is provided,
+		Open the channel if not opened already and, if a StartCommunication PDU is provided,
 		wake up the ECU with ISO14230 fast init.
 
 		Responses to the fast init are drained and timeouts are ignored - the first
@@ -63,40 +72,19 @@ class Kwp2000OverKLineTransport (TransportABC):
 
 		:param init_pdu: StartCommunication PDU to send as part of the fast init
 		'''
-		if not self.hardware.is_open():
-			self.hardware.open()
+		self.open()
 
 		if init_pdu is None:
 			return True
 
-		previous_timeout = self.hardware.get_timeout()
-		self.hardware.set_timeout(0.4)
+		self.channel.fast_init(self.build_payload(init_pdu))
 		try:
-			for (response, time_low, time_high) in self._fast_init(init_pdu):
-				logger.debug('K-Line FastInit: response: {!r}, time low: {}, time high: {}'.format(response, time_low, time_high))
-				self.read_pdu()
+			for _ in range(FAST_INIT_DRAIN_FRAMES):
+				self.read_pdu(timeout=FAST_INIT_DRAIN_TIMEOUT)
 		except TimeoutException:
 			pass
-		finally:
-			self.hardware.set_timeout(previous_timeout)
 
 		return True
-
-	def _fast_init (self, init_pdu: bytes) -> list[tuple[bytes, int, int]]:
-		'''
-		Perform ISO14230 fast init, retrying with shifted timing if the first attempt got an unexpected response
-
-		:return: (response, time low in ms, time high in ms) for every attempt
-		'''
-		init_payload = self.build_payload(init_pdu)
-		responses = []
-		responses.append(self.hardware.iso14230_fast_init(init_payload, timing_offset_ms=0))
-		# @todo: find out if there is some way to self-test and automatically measure the timing offset we should apply
-		if responses[0][0][0:1] not in [b'\x00', b'\x81', b'\xC1']: # most often seen responses, depends on the adapter
-			responses.append(self.hardware.iso14230_fast_init(init_payload, timing_offset_ms=-2))
-			responses.append(self.hardware.iso14230_fast_init(init_payload, timing_offset_ms=2))
-
-		return responses
 
 	def calculate_checksum (self, payload: bytes) -> int:
 		return sum(payload) & 0xFF
@@ -110,8 +98,18 @@ class Kwp2000OverKLineTransport (TransportABC):
 			counter = 0x80
 			data = bytes([data_length]) + data
 
-		payload = bytes([counter, self.tx_id, self.rx_id]) 
+		payload = bytes([counter, self.tx_id, self.rx_id])
 		payload += data
 		payload += self.calculate_checksum(payload).to_bytes(1, 'big')
 
 		return payload
+
+	def _write (self, data: bytes) -> int:
+		logger.debug('K-Line sending: {}'.format(' '.join([hex(x) for x in list(data)])))
+		return self.channel.write(data)
+
+	def _read (self, length: int, timeout: float) -> bytes:
+		logger.debug('K-Line trying to read {} bytes'.format(length))
+		data = self.channel.read(length, timeout)
+		logger.debug('K-Line success: {}'.format(' '.join([hex(x) for x in list(data)])))
+		return data

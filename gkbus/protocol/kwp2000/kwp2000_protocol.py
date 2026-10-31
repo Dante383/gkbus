@@ -3,7 +3,7 @@ import threading
 import time
 from dataclasses import dataclass
 
-from ...hardware import TimeoutException
+from ...exceptions import TimeoutException
 from ..protocol_abc import ProtocolABC, ProtocolException
 from .kwp2000_command import Kwp2000Command
 from .kwp2000_negative_status import Kwp2000NegativeStatus, Kwp2000NegativeStatusIdentifierEnum

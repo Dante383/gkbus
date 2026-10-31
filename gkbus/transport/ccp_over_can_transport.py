@@ -1,71 +1,75 @@
 import time
 
-from ..hardware.can_hardware import CanFilter
-from ..hardware.hardware_abc import HardwareABC, RawFrame, TimeoutException
-from .transport_abc import PacketDirection, RawPacket, TransportABC
+from ..channel import CanChannel, CanFilter, CanFrame
+from ..exceptions import TimeoutException
+from .transport_abc import PacketDirection, TransportABC
 
+#: first byte of a Command Return Message
+CRM_PID = 0xFF
 
 class CcpOverCanTransport (TransportABC):
 	'''
-	CAN Calibration Protocol transport. 
-	Nothing interesting here - CCP doesn't use ISOTP or any other way to break 
+	CAN Calibration Protocol transport.
+	Nothing interesting here - CCP doesn't use ISOTP or any other way to break
 	chunks of data into messages - each command or response must fit within 8 bytes of
-	a standard CAN frame
+	a standard CAN frame.
+	While open, the channel only receives rx_id - the filters it had are restored on close
 	'''
-	def __init__ (self, hardware: HardwareABC, tx_id: int, rx_id: int, crm_only: bool = False) -> None:
-		self.hardware = hardware
-		self.tx_id, self.rx_id = tx_id, rx_id
+
+	channel: CanChannel
+
+	def __init__ (
+		self,
+		channel: CanChannel,
+		tx_id: int,
+		rx_id: int,
+		crm_only: bool = False,
+		timeout: float = 1,
+	) -> None:
+		'''
+		:param channel: CAN bus channel, e.g. from device.canbus()
+		:param tx_id: CAN identifier of Command Receive Objects (requests)
+		:param rx_id: CAN identifier of Data Transmission Objects (responses)
+		:param crm_only: skip everything but Command Return Messages, e.g. DAQ data while flashing
+		:param timeout: seconds to wait for a response
+		'''
+		super().__init__(channel, tx_id, rx_id, timeout)
 		self.crm_only = crm_only
-		self.hardware.set_filters([CanFilter(can_id=self.rx_id, can_mask=0x7ff)])
-		
+		self._previous_filters: list[CanFilter] = []
+
 	def send_pdu (self, pdu: bytes) -> int:
-		data = pdu
-		bytes_written = self.hardware.write(RawFrame(identifier=self.tx_id, data=data))
+		self.channel.send(CanFrame(self.tx_id, pdu))
 
-		self.buffer_push(RawPacket(direction=PacketDirection.OUTGOING, data=data, timestamp=int(time.time()*1000)))
+		self._record(PacketDirection.OUTGOING, pdu)
 
-		return len(data) # can socket doesnt return how many bytes were written @TODO: verify
+		return len(pdu)
 
-	def read_pdu(self) -> bytes:
-
-		start = time.time()
+	def read_pdu (self, timeout: float | None = None) -> bytes:
+		deadline = time.monotonic() + self._timeout(timeout)
 
 		while True:
-
-			if (time.time() - start) > self.hardware.get_timeout():
+			remaining = deadline - time.monotonic()
+			if remaining <= 0:
 				raise TimeoutException
 
-			frame = self.hardware.read(8)
-
-			if frame is None:
-				continue
-
+			frame = self.channel.recv(remaining)
 			data = frame.data
-
-			if data is None:
-				continue
-
-			data = bytes(data)
 
 			# Flashing mode:
 			# accept CRM packets only
-			if self.crm_only:
+			if self.crm_only and (
+				frame.identifier != self.rx_id or len(data) < 3 or data[0] != CRM_PID
+			):
+				continue
 
-				if frame.identifier != self.rx_id:
-					continue
-
-				if len(data) < 3:
-					continue
-
-				if data[0] != 0xFF:
-					continue
-
-			self.buffer_push(
-				RawPacket(
-					direction=PacketDirection.INCOMING,
-					data=data,
-					timestamp=int(time.time() * 1000)
-				)
-			)
+			self._record(PacketDirection.INCOMING, data)
 
 			return data
+
+	def _open_link (self) -> None:
+		self._previous_filters = self.channel.get_filters()
+		self.channel.set_filters([CanFilter.for_id(self.rx_id)])
+
+	def _close_link (self) -> None:
+		if self.channel.is_open():
+			self.channel.set_filters(self._previous_filters)

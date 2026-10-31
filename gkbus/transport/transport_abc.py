@@ -1,10 +1,10 @@
-from abc import ABC
+import time
+from abc import ABC, abstractmethod
 from dataclasses import dataclass
 from enum import Enum
-
 from typing import Self
 
-from ..hardware.hardware_abc import HardwareABC
+from ..channel import ChannelABC
 
 
 class PacketDirection(Enum):
@@ -14,11 +14,11 @@ class PacketDirection(Enum):
 @dataclass
 class RawPacket:
 	'''
-	Raw packet being sent over the hardware port
+	Raw packet being sent over the channel
 
 	:param direction: Direction of the packet - incoming/outgoing
 	:type direction: PacketDirection
-	:param data: Raw data being sent over the hardware port
+	:param data: Raw data being sent over the channel
 	:type data: bytes
 	:param timestamp: Timestamp in miliseconds
 	:type timestamp: int
@@ -37,75 +37,107 @@ class RawPacket:
 
 class TransportABC(ABC):
 	'''
-	Transport layer for protocols
+	Transport layer for protocols: turns PDUs into whatever goes over the channel and back.
 
-	:param buffer: Buffer storing last X packets, X determined by 
+	The transport opens the channel if it isn't open yet, and then it's also the one closing it.
+	A channel you opened yourself stays open when the transport closes - so one channel can be
+	handed from one transport to the next (e.g. KWP2000 followed by CCP on the same CAN bus)
+
+	:param buffer: Buffer storing last X packets, X determined by
 		buffer_size
 	:type buffer: list[RawPacket]
 	:param buffer_size: Determines the size of the buffer.
 		0 - unlimited buffer, None - no buffer
 	:type buffer_size: int
 	'''
-	buffer: list[RawPacket] = [] # is this shared between all transports? @todo critical
-	buffer_size: int = 20
+	buffer_size: int | None = 20
 
-	def __init__ (self, hardware: HardwareABC, tx_id: int | None = None, rx_id: int | None = None) -> None:
+	def __init__ (
+		self,
+		channel: ChannelABC,
+		tx_id: int | None = None,
+		rx_id: int | None = None,
+		timeout: float = 1,
+	) -> None:
 		'''
-		TransportABC constructor
-
-		:param hardware: HardwareABC instance
-		:param tx_id: Default identifier to transmit on - optional, hardware specific
-		:param rx_id: Default identifier to listen for - optional, hardware specific. 
-			For CAN based transports, this will be set as filter in the interface
+		:param channel: channel to communicate over, e.g. from device.kline() or device.canbus()
+		:param tx_id: identifier to transmit on - transport specific
+		:param rx_id: identifier to listen for - transport specific
+		:param timeout: seconds to wait for a response
 		'''
-		self.hardware = hardware
+		self.channel = channel
 		self.tx_id, self.rx_id = tx_id, rx_id
-		self.buffer = []
+		self.timeout = timeout
+		self.buffer: list[RawPacket] = []
+		self._opened = False
+		self._owns_channel = False
 
 	def open (self) -> bool:
 		'''
-		Open the underlaying hardware
+		Open the channel if it isn't open yet and get the transport ready.
+		Does nothing if the transport is already open
 
 		:return: a boolean indicating whether it was opened successfully
 		'''
-		return self.hardware.open()
+		if self.is_open():
+			return True
+		if self._opened:
+			# the channel was closed under us - start over
+			self.close()
+
+		if not self.channel.is_open():
+			self.channel.open()
+			self._owns_channel = True
+		try:
+			self._open_link()
+		except BaseException:
+			self._release_channel()
+			raise
+		self._opened = True
+		return True
 
 	def is_open (self) -> bool:
-		'''
-		Check whether the underlaying hardware is open
-		'''
-		return self.hardware.is_open()
+		return self._opened and self.channel.is_open()
 
 	def close (self) -> None:
 		'''
-		Close the underlaying hardware
+		Close the transport, and the channel if the transport opened it.
+		Does nothing if the transport is already closed
 		'''
-		self.hardware.close()
+		if not self._opened:
+			return
+		self._opened = False
+		try:
+			self._close_link()
+		finally:
+			self._release_channel()
 
 	def init (self, init_pdu: bytes | None = None) -> bool:
 		'''
-		Get ready to transfer: initialize the underlaying hardware if not initialized already
-		and perform any bus-specific wake-up (e.g. fast init on K-Line).
-		Calling this method is not required - it's just a helper to avoid manual hardware initialization
+		Get ready to transfer: open if not open already and perform any bus-specific
+		wake-up (e.g. fast init on K-Line)
 
 		:param init_pdu: optional PDU used by transports that need one to wake up the bus,
 			ignored by the others
 		'''
-		if not self.hardware.is_open():
-			return self.hardware.open()
-		return True
+		return self.open()
 
+	@abstractmethod
 	def send_pdu (self, data: bytes) -> int:
 		'''
-		Send a compiled PDU over hardware port
-		'''
-		pass
+		Send a compiled PDU over the channel
 
-	def read_pdu (self) -> bytes:
+		:return: number of PDU bytes sent
 		'''
-		Read a PDU over hardware port
+
+	@abstractmethod
+	def read_pdu (self, timeout: float | None = None) -> bytes:
 		'''
-		pass
+		Read a PDU from the channel
+
+		:param timeout: seconds to wait, the transport's timeout if not provided
+		:raises TimeoutException: nothing arrived in time
+		'''
 
 	def send_read_pdu (self, data: bytes) -> bytes:
 		'''
@@ -114,50 +146,49 @@ class TransportABC(ABC):
 		self.send_pdu(data)
 		return self.read_pdu()
 
-	def set_tx_id (self, tx_id: int) -> Self:
-		'''
-		Set default identifier to transmit on - hardware specific
-
-		:param tx_id: Identifier to transmit on
-		'''
-		self.hardware.set_tx_id(tx_id)
-		self.tx_id = tx_id
-
-	def get_tx_id (self) -> int:
+	def get_tx_id (self) -> int | None:
 		'''
 		Get default identifier to transmit on
 		'''
 		return self.tx_id
 
-	def get_rx_id (self, rx_id: int) -> int:
+	def get_rx_id (self) -> int | None:
 		'''
-		Get current identifier to listen for. Depending on the hardware,
-		a hardware filter should be created with this identifier,
-		meaning no other messages will be received or processed
+		Get identifier to listen for
 		'''
 		return self.rx_id
 
-	def set_buffer_size (self, buffer_size: int) -> Self:
+	def set_timeout (self, timeout: float) -> Self:
 		'''
-		Set size of the buffer. 
+		Set how long to wait for a response, in seconds
+		'''
+		self.timeout = timeout
+		return self
+
+	def get_timeout (self) -> float:
+		return self.timeout
+
+	def set_buffer_size (self, buffer_size: int | None) -> Self:
+		'''
+		Set size of the buffer.
 
 		:param buffer_size: 0 for unlimited, None for no logging
-		:type buffer_size: int
 		:rtype: TransportABC
 		'''
 		self.buffer_size = buffer_size
+		return self
 
-	def get_buffer_size (self) -> int:
+	def get_buffer_size (self) -> int | None:
 		return self.buffer_size
 
 	def buffer_push (self, packet: RawPacket) -> Self:
-		if (self.buffer_size == None):
+		if (self.buffer_size is None):
 			return self
 
 		self.buffer.append(packet)
 		if (self.buffer_size != 0 and len(self.buffer) > self.buffer_size):
 			del self.buffer[0:(len(self.buffer)-self.buffer_size)]
-		
+
 		return self
 
 	def buffer_dump (self) -> list[RawPacket]:
@@ -169,3 +200,32 @@ class TransportABC(ABC):
 		packets = self.buffer
 		self.buffer = []
 		return packets
+
+	def _record (self, direction: PacketDirection, data: bytes) -> None:
+		self.buffer_push(RawPacket(direction=direction, data=data, timestamp=int(time.time()*1000)))
+
+	def _open_link (self) -> None:
+		'''
+		Hook for transport specific setup, called once the channel is open
+		'''
+
+	def _close_link (self) -> None:
+		'''
+		Hook undoing _open_link(), called before the channel is closed
+		'''
+
+	def _timeout (self, timeout: float | None) -> float:
+		return self.timeout if timeout is None else timeout
+
+	def _release_channel (self) -> None:
+		if self._owns_channel:
+			self._owns_channel = False
+			if self.channel.is_open():
+				self.channel.close()
+
+	def __enter__ (self) -> Self:
+		self.open()
+		return self
+
+	def __exit__ (self, *exc_info: object) -> None:
+		self.close()
