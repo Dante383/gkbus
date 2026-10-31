@@ -61,7 +61,7 @@ def test_serial_discover_order (tmp_path: object, monkeypatch: pytest.MonkeyPatc
 	monkeypatch.setattr('serial.tools.list_ports.comports', lambda: ports)
 
 	assert [x.port for x in SerialKLineDevice.discover()] == [
-		'/dev/ttyUSB0', '/dev/ttyUSB1', '/dev/ttyACM0', '/dev/ttyS0',
+		'/dev/ttyUSB0', '/dev/ttyUSB1', '/dev/ttyS0',
 	]
 
 def test_serial_device_hands_out_unopened_channel () -> None:

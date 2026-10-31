@@ -49,15 +49,18 @@ class SerialKLineDevice(DeviceABC):
 	@classmethod
 	def discover (cls) -> list[Self]:
 		'''
-		Ports most likely to be a K-Line adapter come first: USB-serial converters (ttyUSB),
-		then other USB devices (e.g. ttyACM), then the rest (e.g. ttyS).
-		CAN adapters that show up as a serial port (slcan) and ports without a UART behind them
-		are skipped
+		Ports most likely to be a K-Line adapter come first: USB-serial converters (ttyUSB,
+		USB COM ports on Windows), then the rest (e.g. ttyS).
+		Skipped: CAN adapters that show up as a serial port (slcan), USB CDC ACM devices
+		(ttyACM - J2534 adapters like the Tactrix, Arduinos, modems) and ports without a UART
+		behind them. Pass one of these ports explicitly to use it anyway
 		'''
 		return [
 			cls(port.device, manufacturer=port.manufacturer, serial_number=port.serial_number)
 			for port in sorted(sorted(serial.tools.list_ports.comports()), key=cls._port_priority)
-			if (port.vid, port.pid) not in SLCAN_USB_IDS and not cls._is_phantom(port)
+			if (port.vid, port.pid) not in SLCAN_USB_IDS
+			and not port.name.startswith('ttyACM')
+			and not cls._is_phantom(port)
 		]
 
 	@classmethod
