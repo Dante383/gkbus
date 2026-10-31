@@ -25,6 +25,13 @@ lint = [
   "ruff == 0.11.4",
   "mypy == 1.15.0",
 ]
+test = [
+  "pytest",
+]
+
+[tool.pytest.ini_options]
+testpaths = ["tests"]
+pythonpath = ["."]
 
 [tool.ruff]
 line-length = 100
