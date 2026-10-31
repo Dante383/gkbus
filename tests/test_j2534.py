@@ -263,7 +263,13 @@ def test_find_libraries_windows_registry (
 		('Kline only', 'x64'),
 	]
 	assert libraries[0].profile is registry.OPENPORT
+	# the 32 bit OpenPort DLL is loaded in the 32 bit helper
+	assert libraries[0].bridged() and not libraries[0].native()
+	monkeypatch.setattr(registry, 'bridge_available', lambda: True)
+	assert libraries[0].loadable()
+	monkeypatch.setattr(registry, 'bridge_available', lambda: False)
 	assert not libraries[0].loadable()
+	assert libraries[1].native() and not libraries[1].bridged()
 	assert libraries[1].buses == frozenset({Bus.KLINE})
 
 def test_library_presence (monkeypatch: pytest.MonkeyPatch, tmp_path: object) -> None:
@@ -311,7 +317,7 @@ def adapter (monkeypatch: pytest.MonkeyPatch) -> FakeJ2534Library:
 		return [J2534Message(message.protocol, answer_id.to_bytes(4, 'big') + data[::-1])]
 
 	library = FakeJ2534Library(ecu)
-	monkeypatch.setattr(j2534_device, 'J2534Library', lambda path: library)
+	monkeypatch.setattr(j2534_device, 'load_library', lambda info: library)
 	monkeypatch.setattr(j2534_isotp_link, '_padding_noted', set())
 	return library
 
@@ -835,7 +841,7 @@ def test_ground_pins (openport: J2534Device, adapter: FakeJ2534Library) -> None:
 	adapter.calls.clear()
 	openport.close()
 	assert [x[0] for x in adapter.calls] == [
-		'set_programming_voltage', 'set_programming_voltage', 'close',
+		'set_programming_voltage', 'set_programming_voltage', 'close', 'unload',
 	]
 	assert {x[1] for x in adapter.calls_to('set_programming_voltage')} == {VOLTAGE_OFF}
 	assert adapter.grounded == set() and openport.grounded_pins == frozenset()

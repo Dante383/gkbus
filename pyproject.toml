@@ -19,6 +19,9 @@ dependencies = [
   "libusb-package==1.0.30.0; sys_platform == 'win32'",
 ]
 
+[project.entry-points.pyinstaller40]
+hook-dirs = "gkbus._pyinstaller:get_hook_dirs"
+
 [project.optional-dependencies]
 lint = [
   "ruff == 0.11.4",

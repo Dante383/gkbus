@@ -62,8 +62,13 @@ Code written against a channel doesn't care which adapter is behind it.
 - **Linux / macOS**: install [openport-j2534](https://github.com/bisak/openport-j2534) and
   its udev rule. It installs `/usr/local/lib/libj2534.so` (`.dylib` on macOS), which gkbus
   finds on its own, as it does libraries registered in `~/.passthru/*.json`
-- **Windows**: install the vendor's driver (e.g. Tactrix), it registers itself. Python has to
-  be the same bitness as the DLL. Not tested yet
+- **Windows**: install the vendor's driver (e.g. Tactrix), it registers itself. 32 bit DLLs
+  (like Tactrix's `op20pt32.dll`) work in a 64 bit Python: gkbus loads them in
+  `gkbus_j2534_helper32.exe`, a small 32 bit helper process it ships with. Windows 11 may
+  refuse Tactrix's USB driver; [openport-winusb](https://github.com/prj/openport-winusb)
+  is the usual workaround. Not tested on a real adapter yet
+- Freezing an app with PyInstaller: gkbus' hook bundles the helper, nothing to add to the
+  spec. To rebuild the helper, run `gkbus/device/j2534/helper/build.sh` (needs mingw-w64)
 - Point `GKBUS_J2534_LIBRARY` at a library to use it whether it's registered or not. With
   openport-j2534, `OPENPORT_LOG=/tmp/openport.log` logs the driver's USB traffic
 - ISO-TP is done by the adapter. The OpenPort pads frames with `0x00`, not `0xCC`

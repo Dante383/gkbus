@@ -16,6 +16,7 @@ import serial.tools.list_ports
 
 from ..device_abc import Bus
 from ..obd_pin import ObdPin
+from .bridge import bridge_available
 from .library import library_machine, python_machine
 
 logger = logging.getLogger(__name__)
@@ -120,12 +121,24 @@ class J2534LibraryInfo:
 		machine = library_machine(path) if sys.platform == 'win32' else None
 		return cls(path, name, vendor, buses, profile, machine)
 
-	def loadable (self) -> bool:
+	def native (self) -> bool:
 		'''
-		False if it's a Windows DLL this Python can't load (32 bit DLL in 64 bit Python
-		or the other way round)
+		Whether this Python can load it itself - not a Windows DLL of another architecture
 		'''
 		return self.machine is None or self.machine == python_machine()
+
+	def bridged (self) -> bool:
+		'''
+		Whether it's a 32 bit DLL in a 64 bit Python, which the 32 bit helper loads
+		'''
+		return self.machine == 'x86' and python_machine() != 'x86'
+
+	def loadable (self) -> bool:
+		'''
+		False if it's a Windows DLL neither this Python nor the 32 bit helper can load
+		(e.g. a 64 bit DLL in a 32 bit Python)
+		'''
+		return self.native() or (self.bridged() and bridge_available())
 
 	def present (self) -> bool | None:
 		'''
@@ -156,7 +169,7 @@ def find_libraries () -> list[J2534LibraryInfo]:
 			continue
 		seen.add(key)
 		found.append(library)
-	return _prefer_loadable(found)
+	return _prefer_native(found)
 
 def find_library (spec: str | None = None) -> J2534LibraryInfo | None:
 	'''
@@ -285,12 +298,12 @@ def _declared_buses (entry: dict[str, Any]) -> frozenset[Bus]:
 		return ALL_BUSES
 	return frozenset(bus for protocol, bus in PROTOCOL_BUSES.items() if upper.get(protocol))
 
-def _prefer_loadable (libraries: Iterable[J2534LibraryInfo]) -> list[J2534LibraryInfo]:
+def _prefer_native (libraries: Iterable[J2534LibraryInfo]) -> list[J2534LibraryInfo]:
 	'''
-	Drop DLLs this Python can't load when the same device also registered one it can
+	Drop DLLs this Python can't load itself when the same device also registered one it can
 	(32 and 64 bit registry views)
 	'''
 	libraries = list(libraries)
-	loadable_names = {x.name for x in libraries if x.loadable()}
-	return [x for x in libraries if x.loadable() or x.name not in loadable_names]
+	native_names = {x.name for x in libraries if x.native()}
+	return [x for x in libraries if x.native() or x.name not in native_names]
 

@@ -5,6 +5,7 @@ from ...channel import CanFilter, KLineTiming
 from ...exceptions import ChannelException, ChannelNotSupportedException, DeviceException
 from ..device_abc import Bus, DeviceABC
 from ..obd_pin import ObdPin
+from .bridge import load_library
 from .constants import SHORT_TO_GROUND, VOLTAGE_OFF, Status
 from .library import J2534Error, J2534Library
 from .registry import J2534LibraryInfo, find_libraries, find_library
@@ -84,10 +85,11 @@ class J2534Device(DeviceABC):
 		'''
 		if self._opened:
 			return True
-		library = J2534Library(self.library.path)
+		library = load_library(self.library)
 		try:
 			device_id = library.open()
 		except J2534Error as e:
+			library.unload()
 			raise self._opening_error(e) from e
 		self._library, self._device_id = library, device_id
 		self._opened = True
@@ -117,6 +119,8 @@ class J2534Device(DeviceABC):
 					library.close(device_id)
 				except J2534Error as e:
 					logger.warning('Closing {} failed: {}'.format(self.library.name, e))
+				finally:
+					library.unload()
 
 	def kline (
 		self,
@@ -214,8 +218,9 @@ class J2534Device(DeviceABC):
 				continue
 			if not library.loadable():
 				logger.warning(
-					'Skipping J2534 library {}: it is {}, this Python can\'t load it'.format(
-						library.path, library.machine
+					'Skipping J2534 library {}: it is {}, this Python can\'t load it{}'.format(
+						library.path, library.machine,
+						' and the 32 bit helper is missing' if library.bridged() else '',
 					)
 				)
 				continue

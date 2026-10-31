@@ -55,6 +55,12 @@ class SConfig(Structure):
 class SConfigList(Structure):
 	_fields_ = (('NumOfParams', c_ulong), ('ConfigPtr', POINTER(SConfig)))
 
+class SByteArray(Structure):
+	_fields_ = (('NumOfBytes', c_ulong), ('BytePtr', POINTER(c_ubyte)))
+
+#: what PassThruIoctl can be given to read from and write to
+IoctlData = PassThruMsg | SConfigList | SByteArray | c_ulong
+
 @dataclass(frozen=True)
 class J2534Message:
 	'''
@@ -136,11 +142,20 @@ ERROR_TYPES: dict[int, type[J2534Error]] = {
 	Status.ERR_CHANNEL_IN_USE: J2534OpeningError,
 }
 
+#: what PassThruReadMsgs returns when it read fewer messages than asked for, or none
+QUIET_READ_STATUSES = frozenset({Status.NOERROR, Status.ERR_BUFFER_EMPTY, Status.ERR_TIMEOUT})
+
 def status_name (status: int) -> str:
 	try:
 		return Status(status).name
 	except ValueError:
 		return 'status 0x{:02X}'.format(status)
+
+def ioctl_name (ioctl_id: int) -> str:
+	try:
+		return Ioctl(ioctl_id).name
+	except ValueError:
+		return '0x{:X}'.format(ioctl_id)
 
 def error_for (function: str, status: int, description: str = '') -> J2534Error:
 	return ERROR_TYPES.get(status, J2534ChannelError)(function, status, description)
@@ -268,13 +283,8 @@ class J2534Library:
 		read = c_ulong(count)
 		status = self._dll.PassThruReadMsgs(channel_id, buffer, byref(read), timeout_ms)
 		messages = [J2534Message.from_struct(buffer[i]) for i in range(min(read.value, count))]
-		if status == Status.ERR_BUFFER_OVERFLOW:
-			# the messages that made it are still good
-			logger.warning('J2534 receive queue overran, messages were lost: {}'.format(
-				self.last_error()
-			))
-		elif status not in (Status.NOERROR, Status.ERR_BUFFER_EMPTY, Status.ERR_TIMEOUT):
-			raise self._error('PassThruReadMsgs', status)
+		if status not in QUIET_READ_STATUSES:
+			self._check_read(status, self.last_error())
 		return messages
 
 	def write_msgs (
@@ -345,32 +355,41 @@ class J2534Library:
 			return ''
 		return self._text(buffer)
 
-	def ioctl (self, channel_id: int, ioctl_id: int, data_in: object, data_out: object) -> None:
+	def ioctl (
+		self,
+		channel_id: int,
+		ioctl_id: int,
+		data_in: IoctlData | None = None,
+		data_out: IoctlData | None = None,
+	) -> None:
 		'''
-		:param data_in: pointer (byref) or None
-		:param data_out: pointer (byref) or None
+		:param data_in: what the input pointer points to, None for a NULL pointer
+		:param data_out: what the output pointer points to, filled in by the library
 		'''
 		self._call(
-			'PassThruIoctl', channel_id, ioctl_id, data_in, data_out, name=Ioctl(ioctl_id).name,
+			'PassThruIoctl', channel_id, ioctl_id,
+			byref(data_in) if data_in is not None else None,
+			byref(data_out) if data_out is not None else None,
+			name=ioctl_name(ioctl_id),
 		)
 
 	def get_config (self, channel_id: int, parameter: int) -> int:
 		config = SConfig(parameter, 0)
 		config_list = SConfigList(1, ctypes.pointer(config))
-		self.ioctl(channel_id, Ioctl.GET_CONFIG, byref(config_list), None)
+		self.ioctl(channel_id, Ioctl.GET_CONFIG, config_list)
 		return int(config.Value)
 
 	def set_config (self, channel_id: int, parameter: int, value: int) -> None:
 		config = SConfig(parameter, value)
 		config_list = SConfigList(1, ctypes.pointer(config))
-		self.ioctl(channel_id, Ioctl.SET_CONFIG, byref(config_list), None)
+		self.ioctl(channel_id, Ioctl.SET_CONFIG, config_list)
 
 	def read_vbatt (self, device_id: int) -> int:
 		'''
 		:return: battery voltage (OBD pin 16) in millivolts
 		'''
 		voltage = c_ulong()
-		self.ioctl(device_id, Ioctl.READ_VBATT, None, byref(voltage))
+		self.ioctl(device_id, Ioctl.READ_VBATT, None, voltage)
 		return voltage.value
 
 	def fast_init (self, channel_id: int, request: J2534Message) -> bytes:
@@ -380,14 +399,19 @@ class J2534Library:
 		:return: the ECU's response
 		'''
 		response = PassThruMsg()
-		self.ioctl(channel_id, Ioctl.FAST_INIT, byref(request.to_struct()), byref(response))
+		self.ioctl(channel_id, Ioctl.FAST_INIT, request.to_struct(), response)
 		return J2534Message.from_struct(response).data
 
 	def clear_rx_buffer (self, channel_id: int) -> None:
-		self.ioctl(channel_id, Ioctl.CLEAR_RX_BUFFER, None, None)
+		self.ioctl(channel_id, Ioctl.CLEAR_RX_BUFFER)
 
 	def clear_tx_buffer (self, channel_id: int) -> None:
-		self.ioctl(channel_id, Ioctl.CLEAR_TX_BUFFER, None, None)
+		self.ioctl(channel_id, Ioctl.CLEAR_TX_BUFFER)
+
+	def unload (self) -> None:
+		'''
+		Done with the library. Does nothing here - ctypes can't unload a library
+		'''
 
 	def _call (self, function: str, *args: object, name: str | None = None) -> None:
 		status = getattr(self._dll, function)(*args)
@@ -396,6 +420,19 @@ class J2534Library:
 
 	def _error (self, function: str, status: int) -> J2534Error:
 		return error_for(function, status, self.last_error())
+
+	@staticmethod
+	def _check_read (status: int, description: str) -> None:
+		'''
+		Act on what PassThruReadMsgs returned, if it isn't one of QUIET_READ_STATUSES
+		'''
+		if status == Status.ERR_BUFFER_OVERFLOW:
+			# the messages that made it are still good
+			logger.warning('J2534 receive queue overran, messages were lost: {}'.format(
+				description
+			))
+		elif status not in QUIET_READ_STATUSES:
+			raise error_for('PassThruReadMsgs', status, description)
 
 	@staticmethod
 	def _text (buffer: ctypes.Array[ctypes.c_char]) -> str:
