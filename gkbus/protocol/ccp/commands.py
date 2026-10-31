@@ -293,7 +293,7 @@ class Disconnect(CcpCommand):
 	code = 0x07
 
 	def init (self, disconnect_type: DisconnectType, station_address: int) -> None:
-		self.data = disconnect_type.value.to_bytes(1, 'little') + station_address.to_bytes(2, 'little')
+		self.data = disconnect_type.value.to_bytes(1, 'little') + b'\x00' + station_address.to_bytes(2, 'little')
 
 class SetSessionStatus(CcpCommand):
 	'''

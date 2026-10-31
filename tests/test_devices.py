@@ -16,6 +16,7 @@ from gkbus.device import (
 	find_device,
 )
 from gkbus.device.python_can import PythonCanChannel
+from gkbus.device.serial import serial_kline_device
 from gkbus.device.socketcan import socketcan_device
 from gkbus.exceptions import (
 	ChannelInUseException,
@@ -42,9 +43,16 @@ def can_interfaces (tmp_path: object, monkeypatch: pytest.MonkeyPatch) -> object
 	monkeypatch.setattr(socketcan_device, 'platform', 'linux')
 	return tmp_path
 
-def test_serial_discover_order (monkeypatch: pytest.MonkeyPatch) -> None:
+def test_serial_discover_order (tmp_path: object, monkeypatch: pytest.MonkeyPatch) -> None:
+	# ttyS0 is a real UART, ttyS1 a placeholder without one
+	for name, uart_type in [('ttyS0', '4'), ('ttyS1', '0')]:
+		(tmp_path / name).mkdir()
+		(tmp_path / name / 'type').write_text(uart_type + '\n')
+	monkeypatch.setattr(serial_kline_device, 'TTY_DIR', str(tmp_path))
+
 	ports = [
 		comport('ttyS0'),
+		comport('ttyS1'),
 		comport('ttyACM0', 0x1234, 0x0001),
 		comport('ttyACM1', 0xAD50, 0x60C4),  # slcan CANable
 		comport('ttyUSB1', 0x0403, 0x6001),

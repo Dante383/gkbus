@@ -1,3 +1,4 @@
+import os
 from typing import Self
 
 import serial.tools.list_ports
@@ -6,6 +7,8 @@ from serial.tools.list_ports_common import ListPortInfo
 from ..device_abc import Bus, DeviceABC
 from ..python_can.backends import SLCAN_USB_IDS
 from .serial_kline_channel import SerialKLineChannel
+
+TTY_DIR = '/sys/class/tty'
 
 
 class SerialKLineDevice(DeviceABC):
@@ -48,12 +51,13 @@ class SerialKLineDevice(DeviceABC):
 		'''
 		Ports most likely to be a K-Line adapter come first: USB-serial converters (ttyUSB),
 		then other USB devices (e.g. ttyACM), then the rest (e.g. ttyS).
-		CAN adapters that show up as a serial port (slcan) are skipped
+		CAN adapters that show up as a serial port (slcan) and ports without a UART behind them
+		are skipped
 		'''
 		return [
 			cls(port.device, manufacturer=port.manufacturer, serial_number=port.serial_number)
 			for port in sorted(sorted(serial.tools.list_ports.comports()), key=cls._port_priority)
-			if (port.vid, port.pid) not in SLCAN_USB_IDS
+			if (port.vid, port.pid) not in SLCAN_USB_IDS and not cls._is_phantom(port)
 		]
 
 	@classmethod
@@ -73,3 +77,15 @@ class SerialKLineDevice(DeviceABC):
 		if port.vid is not None:
 			return 1
 		return 2
+
+	@staticmethod
+	def _is_phantom (port: ListPortInfo) -> bool:
+		'''
+		Linux registers ttyS ports even when there's no UART behind them (sysfs type 0,
+		PORT_UNKNOWN). pyserial stopped filtering them out with kernel 6.5
+		'''
+		try:
+			with open(os.path.join(TTY_DIR, port.name, 'type')) as file:
+				return file.read().strip() == '0'
+		except OSError:
+			return False

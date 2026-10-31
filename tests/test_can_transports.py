@@ -11,6 +11,8 @@ from gkbus.device import KernelIsoTpLink, PythonCanChannel
 from gkbus.device.python_can.backends import backend_for
 from gkbus.device.socketcan import kernel_isotp_link
 from gkbus.exceptions import ChannelException, OpeningChannelException, TimeoutException
+from gkbus.protocol import ccp
+from gkbus.protocol.ccp.ccp_protocol import CcpRequestFrame
 from gkbus.transport import CcpOverCanTransport, Kwp2000OverCanTransport
 
 from .fakes import FakeCanBus, FakeCanChannel
@@ -206,6 +208,14 @@ def test_ccp_send () -> None:
 	transport.open()
 	assert transport.send_pdu(b'\x01\x00\x01') == 3
 	assert bus.frames == [CanFrame(TESTER_ID, b'\x01\x00\x01')]
+
+def test_ccp_disconnect_layout () -> None:
+	# CMD, CTR, disconnect type, reserved, station address (Intel), padding
+	command = ccp.commands.Disconnect(
+		ccp.enums.DisconnectType.END_OF_SESSION, station_address=0x0201,
+	)
+	frame = CcpRequestFrame(command.get_code(), 0x05, command.get_data())
+	assert frame.to_pdu() == b'\x07\x05\x01\x00\x01\x02\x00\x00'
 
 def test_isotp_params_reach_the_link () -> None:
 	channel = FakeCanChannel(FakeCanBus())
