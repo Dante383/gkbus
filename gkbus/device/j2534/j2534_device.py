@@ -1,0 +1,201 @@
+import logging
+from typing import TYPE_CHECKING, Self
+
+from ...channel import CanFilter
+from ...exceptions import ChannelException, ChannelNotSupportedException, DeviceException
+from ..device_abc import Bus, DeviceABC
+from .constants import Status
+from .library import J2534Error, J2534Library
+from .registry import J2534LibraryInfo, find_libraries, find_library
+
+if TYPE_CHECKING:
+	from .j2534_can_channel import J2534CanChannel
+
+logger = logging.getLogger(__name__)
+
+#: port strings of J2534 devices start with this, e.g. j2534:openport
+PORT_PREFIX = 'j2534'
+#: why PassThruOpen fails, in words
+OPENING_REASONS: dict[int, str] = {
+	Status.ERR_DEVICE_NOT_CONNECTED: '{} is not connected',
+	Status.ERR_DEVICE_IN_USE: '{} is in use by another program',
+}
+
+class J2534Device(DeviceABC):
+	'''
+	SAE J2534 pass-thru adapter (Tactrix OpenPort 2.0 and others), driven through its
+	J2534 library - Tactrix's DLL on Windows, openport-j2534 on Linux and macOS.
+
+	The library is loaded and the adapter taken (PassThruOpen) when the device is opened,
+	never by discover(). J2534 allows one program to use an adapter at a time
+	'''
+
+	buses = frozenset({Bus.KLINE, Bus.CANBUS})
+
+	def __init__ (self, library: J2534LibraryInfo | str | None = None) -> None:
+		'''
+		:param library: the J2534 library to use, a path to one, or a part of an installed
+			library's name or vendor (e.g. openport). None - the first installed library
+		:raises DeviceException: no such library is installed
+		'''
+		super().__init__()
+		if not isinstance(library, J2534LibraryInfo):
+			info = find_library(library)
+			if info is None:
+				raise DeviceException(
+					'No J2534 library {}installed'.format(
+						'matching {} is '.format(library) if library else 'is '
+					)
+				)
+			library = info
+		self.library = library
+		self.profile = library.profile
+		#: narrowed to what the library declared
+		self.buses = library.buses
+		self.port = '{}:{}'.format(PORT_PREFIX, library.name)
+		#: reported by the adapter when it's opened
+		self.firmware_version: str | None = None
+		self.library_version: str | None = None
+		self.api_version: str | None = None
+		self._library: J2534Library | None = None
+		self._device_id: int | None = None
+
+	def open (self) -> bool:
+		'''
+		Load the library and take the adapter. Does nothing if the device is already open
+
+		:raises OpeningChannelException: the library couldn't be loaded, the adapter isn't
+			connected or another program uses it
+		'''
+		if self._opened:
+			return True
+		library = J2534Library(self.library.path)
+		try:
+			device_id = library.open()
+		except J2534Error as e:
+			raise self._opening_error(e) from e
+		self._library, self._device_id = library, device_id
+		self._opened = True
+
+		try:
+			self.firmware_version, self.library_version, self.api_version = \
+				library.read_version(device_id)
+		except J2534Error as e:
+			logger.debug('Reading the versions of {} failed: {}'.format(self.library.name, e))
+		logger.debug('Opened {}: firmware {}, library {}, API {}'.format(
+			self.library.name, self.firmware_version, self.library_version, self.api_version
+		))
+		return True
+
+	def close (self) -> None:
+		'''
+		Close the channels it handed out and release the adapter.
+		Does nothing if the device is already closed
+		'''
+		try:
+			super().close()
+		finally:
+			library, device_id = self._library, self._device_id
+			self._library = self._device_id = None
+			if library is not None and device_id is not None:
+				try:
+					library.close(device_id)
+				except J2534Error as e:
+					logger.warning('Closing {} failed: {}'.format(self.library.name, e))
+
+	def canbus (
+		self,
+		bitrate: int = 500_000,
+		filters: list[CanFilter] | None = None,
+	) -> 'J2534CanChannel':
+		'''
+		Get the CAN bus channel. Opens the device (not the channel) if it wasn't open.
+		The channel isn't opened - open it yourself, or let the transport do it.
+		ISO-TP links from it are done by the adapter
+
+		:raises ChannelNotSupportedException: the library doesn't do CAN
+		:raises ChannelInUseException: the CAN bus channel handed out earlier is still open
+		'''
+		from .j2534_can_channel import J2534CanChannel
+
+		self._require(Bus.CANBUS)
+		return self._hand_out(
+			Bus.CANBUS, lambda: J2534CanChannel(self, bitrate=bitrate, filters=filters),
+		)
+
+	def battery_voltage (self) -> float:
+		'''
+		Voltage on OBD pin 16 (battery positive), in volts. Opens the device if it wasn't open
+		'''
+		library, device_id = self.handle()
+		return library.read_vbatt(device_id) / 1000
+
+	def handle (self) -> tuple[J2534Library, int]:
+		'''
+		The loaded library and the J2534 device id, for channels to call it with.
+		Opens the device if it wasn't open
+		'''
+		if not self._opened:
+			self.open()
+		if self._library is None or self._device_id is None:
+			raise ChannelException('{} is not open'.format(self.description()))
+		return self._library, self._device_id
+
+	def description (self) -> str:
+		text = 'J2534 {}'.format(self.library.name)
+		if self.library.vendor:
+			text += ' ({})'.format(self.library.vendor)
+		if self.firmware_version:
+			text += ', firmware {}'.format(self.firmware_version)
+		return text
+
+	@classmethod
+	def discover (cls) -> list[Self]:
+		'''
+		Installed J2534 libraries whose adapter is plugged in, or might be - most libraries
+		can't tell without taking the adapter, which discovery never does
+		'''
+		devices = []
+		for library in find_libraries():
+			if library.present() is False:
+				continue
+			if not library.loadable():
+				logger.warning(
+					'Skipping J2534 library {}: it is {}, this Python can\'t load it'.format(
+						library.path, library.machine
+					)
+				)
+				continue
+			devices.append(cls(library))
+		return devices
+
+	@classmethod
+	def from_port (cls, port: str) -> Self | None:
+		'''
+		Recognises j2534 (the first installed library), j2534:<part of a library's name or
+		vendor> (e.g. j2534:openport) and j2534:<path to a library>
+
+		:raises DeviceException: no such library is installed
+		'''
+		prefix, _, spec = port.partition(':')
+		if prefix.lower() != PORT_PREFIX:
+			return None
+		return cls(spec or None)
+
+	def _require (self, bus: Bus) -> None:
+		if bus not in self.buses:
+			raise ChannelNotSupportedException(
+				'{} does not support {}'.format(self.description(), bus.value)
+			)
+
+	def _opening_error (self, error: J2534Error) -> J2534Error:
+		'''
+		The same error, with the usual causes spelled out
+		'''
+		reason = OPENING_REASONS.get(error.status)
+		if reason is None:
+			return error
+		description = reason.format(self.library.name)
+		if error.description and not error._repeats(error.description):
+			description += ' ({})'.format(error.description)
+		return type(error)(error.function, error.status, description)

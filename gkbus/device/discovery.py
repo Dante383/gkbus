@@ -3,6 +3,7 @@ from collections.abc import Iterable
 
 from ..exceptions import DeviceException
 from .device_abc import Bus, DeviceABC
+from .j2534 import J2534Device
 from .python_can import PythonCanDevice
 from .serial import SerialKLineDevice
 from .socketcan import SocketCanDevice
@@ -11,7 +12,9 @@ logger = logging.getLogger(__name__)
 
 #: every known device type, in the order find_device() asks them - most specific first,
 #: serial ports last since anything could be one
-DEVICE_TYPES: list[type[DeviceABC]] = [PythonCanDevice, SocketCanDevice, SerialKLineDevice]
+DEVICE_TYPES: list[type[DeviceABC]] = [
+	J2534Device, PythonCanDevice, SocketCanDevice, SerialKLineDevice,
+]
 
 def discover (buses: Iterable[Bus] | None = None) -> list[DeviceABC]:
 	'''
@@ -29,7 +32,8 @@ def discover (buses: Iterable[Bus] | None = None) -> list[DeviceABC]:
 		if not device_type.buses & wanted:
 			continue
 		try:
-			devices.extend(device_type.discover())
+			# a device can support fewer buses than its type, e.g. a CAN only J2534 adapter
+			devices.extend(x for x in device_type.discover() if x.buses & wanted)
 		except Exception as e:
 			logger.warning('Discovering {} devices failed: {}'.format(device_type.__name__, e))
 

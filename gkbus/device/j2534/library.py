@@ -101,9 +101,16 @@ class J2534Error(GkbusException):
 		self.status = status
 		self.description = description
 		message = '{} failed: {}'.format(function, status_name(status))
-		if description:
+		if description and not self._repeats(description):
 			message += ' ({})'.format(description)
 		super().__init__(message)
+
+	def _repeats (self, description: str) -> bool:
+		'''
+		Whether the library's description says nothing but the function and status
+		'''
+		rest = description.replace(status_name(self.status), '').strip(' :')
+		return self.function.startswith(rest)
 
 class J2534ChannelError(J2534Error, ChannelException):
 	pass
@@ -154,7 +161,7 @@ FUNCTIONS: dict[str, list[Any]] = {
 	],
 	'PassThruStopMsgFilter': [c_ulong, c_ulong],
 	'PassThruSetProgrammingVoltage': [c_ulong, c_ulong, c_ulong],
-	'PassThruReadVersion': [c_char_p, c_char_p, c_char_p, c_char_p],
+	'PassThruReadVersion': [c_ulong, c_char_p, c_char_p, c_char_p],
 	'PassThruGetLastError': [c_char_p],
 	'PassThruIoctl': [c_ulong, c_ulong, c_void_p, c_void_p],
 }
