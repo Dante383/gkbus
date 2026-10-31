@@ -81,6 +81,10 @@ OPENPORT = AdapterProfile(
 PROFILE_MARKERS: list[tuple[tuple[str, ...], AdapterProfile]] = [
 	(('openport', 'tactrix', 'op20pt', 'libj2534'), OPENPORT),
 ]
+#: (vendor id, product id) of the known J2534 adapters, e.g. for serial port discovery to skip
+ADAPTER_USB_IDS: frozenset[tuple[int, int]] = frozenset().union(
+	*(profile.usb_ids for _, profile in PROFILE_MARKERS)
+)
 
 @dataclass(frozen=True)
 class J2534LibraryInfo:

@@ -26,8 +26,11 @@ logger = logging.getLogger(__name__)
 TIMING_STEPS_PER_MS = 2
 #: how long write() waits for the adapter on top of P3 and the time the bytes take on the wire
 WRITE_TIMEOUT_MARGIN_MS = 1000
-#: fast init statuses that mean the ECU didn't answer, rather than the adapter failing
-NO_ANSWER = (Status.ERR_INIT_FAILED, Status.ERR_TIMEOUT, Status.ERR_BUFFER_EMPTY)
+#: fast init statuses that mean the ECU didn't answer, rather than the adapter failing. The
+#: OpenPort answers ERR_FAILED when nothing answers
+NO_ANSWER = (
+	Status.ERR_INIT_FAILED, Status.ERR_TIMEOUT, Status.ERR_BUFFER_EMPTY, Status.ERR_FAILED,
+)
 #: connect statuses that mean this way to the pin isn't available, try the next one
 ROUTE_UNAVAILABLE = (
 	Status.ERR_INVALID_PROTOCOL_ID, Status.ERR_NOT_SUPPORTED, Status.ERR_PIN_INVALID,

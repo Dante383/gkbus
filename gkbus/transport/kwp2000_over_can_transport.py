@@ -6,7 +6,8 @@ from .transport_abc import PacketDirection, TransportABC
 class Kwp2000OverCanTransport (TransportABC):
 	'''
 	KWP2000 over CAN: PDUs go over an ISO-TP link (ISO 15765-2) between tx_id and rx_id.
-	The link is done by the kernel on SocketCAN and in software everywhere else
+	The link is done by the adapter on J2534, by the kernel on SocketCAN and in software
+	everywhere else
 	'''
 
 	channel: CanChannel
@@ -24,7 +25,8 @@ class Kwp2000OverCanTransport (TransportABC):
 		:param tx_id: CAN identifier requests are sent on
 		:param rx_id: CAN identifier responses come from
 		:param timeout: seconds to wait for a response
-		:param isotp_params: padding, stmin and block size. Padded with 0xCC by default
+		:param isotp_params: padding, stmin and block size. Padded with 0xCC by default, the
+			OpenPort 2.0 pads with 0x00 whatever is asked for
 		'''
 		super().__init__(channel, tx_id, rx_id, timeout)
 		self.isotp_params = isotp_params

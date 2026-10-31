@@ -22,8 +22,14 @@ OPENING_REASONS: dict[int, str] = {
 	Status.ERR_DEVICE_NOT_CONNECTED: '{} is not connected',
 	Status.ERR_DEVICE_IN_USE: '{} is in use by another program',
 }
-#: statuses of PassThruSetProgrammingVoltage that mean the adapter can't ground the pin
-CANT_GROUND = frozenset({Status.ERR_PIN_INVALID, Status.ERR_NOT_SUPPORTED})
+#: statuses of PassThruSetProgrammingVoltage that mean the adapter can't ground the pin. The
+#: OpenPort takes grounding pin 2, which only does voltage, for a voltage out of range
+CANT_GROUND = frozenset({
+	Status.ERR_PIN_INVALID,
+	Status.ERR_NOT_SUPPORTED,
+	Status.ERR_OEM_VOLTAGE_TOO_HIGH,
+	Status.ERR_OEM_VOLTAGE_TOO_LOW,
+})
 
 class J2534Device(DeviceABC):
 	'''

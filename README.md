@@ -37,7 +37,7 @@ kwp.close()
 
 ## Layers
 
-- **Device** - the physical adapter (KKL cable, SocketCAN interface, PCAN, ...). Find them with
+- **Device** - the physical adapter (KKL cable, SocketCAN interface, PCAN, J2534, ...). Find them with
   `discover()`, or create one from a port name with `find_device()`
 - **Channel** - one bus on a device, `device.kline()` or `device.canbus()`. Reads and writes
   bytes (K-Line) or frames (CAN)
@@ -45,6 +45,50 @@ kwp.close()
   Opens the channel if it isn't open yet and then closes it too - a channel you opened yourself
   stays open, so you can hand it from one transport to the next
 - **Protocol** - KWP2000, CCP
+
+## Devices
+
+Code written against a channel doesn't care which adapter is behind it.
+
+| Device | Buses | Port string |
+|---|---|---|
+| Serial K-Line (KKL / FTDI cable) | K-Line | `/dev/ttyUSB0`, `COM3` |
+| SocketCAN (Linux) | CAN | `can0` |
+| python-can (PCAN, Kvaser, ...) | CAN | `pcan:PCAN_USBBUS1` |
+| J2534 PassThru (OpenPort 2.0, ...) | K-Line, CAN | `j2534`, `j2534:openport`, `j2534:/path/to/lib.so` |
+
+### J2534
+
+- **Linux / macOS**: install [openport-j2534](https://github.com/bisak/openport-j2534) and
+  its udev rule. It installs `/usr/local/lib/libj2534.so` (`.dylib` on macOS), which gkbus
+  finds on its own, as it does libraries registered in `~/.passthru/*.json`
+- **Windows**: install the vendor's driver (e.g. Tactrix), it registers itself. Python has to
+  be the same bitness as the DLL. Not tested yet
+- Point `GKBUS_J2534_LIBRARY` at a library to use it whether it's registered or not. With
+  openport-j2534, `OPENPORT_LOG=/tmp/openport.log` logs the driver's USB traffic
+- ISO-TP is done by the adapter. The OpenPort pads frames with `0x00`, not `0xCC`
+- K-Line timing (P1, P3, P4) is kept by the adapter, see `KLineTiming`. Fast baudrates work
+  with exact values, e.g. the SIMK43's 19531, 39062, 58594 and 125000
+
+### OBD pins
+
+J2534 adapters can do K-Line on other OBD pins and ground pins. Other devices log what
+to wire by hand instead, so the same code works with any adapter:
+
+```
+from gkbus.device import ObdPin
+
+channel = device.kline(pin=ObdPin.L_LINE)  # K-Line on pin 15
+print(device.kline_pins(), device.groundable_pins())
+
+# grounded while inside, released afterwards. Returns the pins to ground by hand
+with device.grounded(ObdPin.PIN_9, ObdPin.PIN_12) as manual:
+	...
+```
+
+`device.ground_pin()` / `device.release_pin()` do the same without the context manager, and
+`device.close()` releases whatever is still grounded. Some OpenPort 2.0 clones acknowledge
+grounding pins 1, 3, 9, 11, 12 and 13 but don't do it, check with a multimeter.
 
 ## Supported protocols
 

@@ -7,6 +7,7 @@ from serial.tools.list_ports_common import ListPortInfo
 
 from ...channel import KLineTiming
 from ..device_abc import Bus, DeviceABC
+from ..j2534.registry import ADAPTER_USB_IDS
 from ..obd_pin import ObdPin
 from ..python_can.backends import SLCAN_USB_IDS
 from .serial_kline_channel import SerialKLineChannel
@@ -77,14 +78,16 @@ class SerialKLineDevice(DeviceABC):
 		'''
 		Ports most likely to be a K-Line adapter come first: USB-serial converters (ttyUSB,
 		USB COM ports on Windows), then the rest (e.g. ttyS).
-		Skipped: CAN adapters that show up as a serial port (slcan), USB CDC ACM devices
-		(ttyACM - J2534 adapters like the Tactrix, Arduinos, modems) and ports without a UART
-		behind them. Pass one of these ports explicitly to use it anyway
+		Skipped: CAN adapters that show up as a serial port (slcan), J2534 adapters (the Tactrix
+		OpenPort is a USB CDC ACM device, J2534Device drives it), other USB CDC ACM devices
+		(ttyACM - Arduinos, modems) and ports without a UART behind them. Pass one of these ports
+		explicitly to use it anyway
 		'''
 		return [
 			cls(port.device, manufacturer=port.manufacturer, serial_number=port.serial_number)
 			for port in sorted(sorted(serial.tools.list_ports.comports()), key=cls._port_priority)
 			if (port.vid, port.pid) not in SLCAN_USB_IDS
+			and (port.vid, port.pid) not in ADAPTER_USB_IDS
 			and not port.name.startswith('ttyACM')
 			and not cls._is_phantom(port)
 		]

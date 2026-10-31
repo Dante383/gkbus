@@ -306,7 +306,9 @@ class FakeJ2534Library:
 		self._call('set_programming_voltage', pin, voltage)
 		if voltage == SHORT_TO_GROUND:
 			if pin not in self.groundable:
-				raise error_for('PassThruSetProgrammingVoltage', Status.ERR_PIN_INVALID)
+				# the OpenPort's pin 2 only does voltage, and -2 is out of its range
+				status = Status.ERR_OEM_VOLTAGE_TOO_HIGH if pin == 2 else Status.ERR_PIN_INVALID
+				raise error_for('PassThruSetProgrammingVoltage', status)
 			if any(self.CHANNEL_PINS.get(x) == pin for x in self.channels):
 				raise error_for('PassThruSetProgrammingVoltage', Status.ERR_CHANNEL_IN_USE)
 			self.grounded.add(pin)

@@ -41,7 +41,8 @@ def discover (buses: Iterable[Bus] | None = None) -> list[DeviceABC]:
 
 def find_device (port: str, buses: Iterable[Bus] | None = None) -> DeviceABC:
 	'''
-	Create a device from a port string, e.g. /dev/ttyUSB0, COM3, can0 or pcan:PCAN_USBBUS1.
+	Create a device from a port string, e.g. /dev/ttyUSB0, COM3, can0, pcan:PCAN_USBBUS1
+	or j2534:openport.
 	Nothing is scanned or opened
 
 	:param buses: only consider device types supporting any of these buses

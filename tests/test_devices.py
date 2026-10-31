@@ -56,6 +56,7 @@ def test_serial_discover_order (tmp_path: object, monkeypatch: pytest.MonkeyPatc
 		comport('ttyS1'),
 		comport('ttyACM0', 0x1234, 0x0001),
 		comport('ttyACM1', 0xAD50, 0x60C4),  # slcan CANable
+		comport('cu.usbmodem1', 0x0403, 0xCC4D),  # OpenPort on macOS
 		comport('ttyUSB1', 0x0403, 0x6001),
 		comport('ttyUSB0', 0x0403, 0x6001),
 	]

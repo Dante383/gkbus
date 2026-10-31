@@ -696,8 +696,11 @@ def test_kline_fast_init (openport: J2534Device, kline_adapter: FakeJ2534Library
 	# an ECU not answering is no error
 	kline_adapter.ecu = lambda message: []
 	assert channel.fast_init(start_communication) == b''
-	# the adapter failing is
+	# the OpenPort's way of saying nothing answered
 	kline_adapter.fail['fast_init'] = Status.ERR_FAILED
+	assert channel.fast_init(start_communication) == b''
+	# the adapter failing is
+	kline_adapter.fail['fast_init'] = Status.ERR_DEVICE_NOT_CONNECTED
 	with pytest.raises(J2534Error):
 		channel.fast_init(start_communication)
 
@@ -846,6 +849,7 @@ def test_ground_pin_the_adapter_cant (
 		'can\'t ground it',
 	]
 	assert openport.grounded_pins == frozenset()
+	assert openport.ground_pin(ObdPin.PIN_8) is False
 	adapter.fail['set_programming_voltage'] = Status.ERR_NOT_SUPPORTED
 	assert openport.ground_pin(ObdPin.PIN_3) is False
 
@@ -854,7 +858,7 @@ def test_ground_pin_the_adapter_cant (
 	adapter.calls.clear()
 	openport.close()
 	assert sorted(caplog.messages) == [
-		'OBD pin 2 can be disconnected from ground', 'OBD pin 3 can be disconnected from ground',
+		'OBD pin {} can be disconnected from ground'.format(x) for x in (2, 3, 8)
 	]
 	assert adapter.calls_to('set_programming_voltage') == []
 
