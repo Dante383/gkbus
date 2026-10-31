@@ -1,0 +1,111 @@
+'''
+SAE J2534 constants - J2534-1 (04.04), the J2534-2 ones gkbus uses and a few vendor extensions
+'''
+
+from enum import IntEnum
+
+
+class Protocol(IntEnum):
+	ISO9141 = 3
+	ISO14230 = 4
+	CAN = 5
+	ISO15765 = 6
+	#: J2534-2 pin switched protocols, the pins are picked with the J1962_PINS config parameter
+	ISO9141_PS = 0x8002
+	ISO14230_PS = 0x8003
+	CAN_PS = 0x8004
+	ISO15765_PS = 0x8005
+	#: Tactrix: ISO 14230 on the L line (OBD pin 15)
+	ISO14230_CH2 = 0x9321
+
+class Status(IntEnum):
+	NOERROR = 0x00
+	ERR_NOT_SUPPORTED = 0x01
+	ERR_INVALID_CHANNEL_ID = 0x02
+	ERR_INVALID_PROTOCOL_ID = 0x03
+	ERR_NULL_PARAMETER = 0x04
+	ERR_INVALID_IOCTL_VALUE = 0x05
+	ERR_INVALID_FLAGS = 0x06
+	ERR_FAILED = 0x07
+	ERR_DEVICE_NOT_CONNECTED = 0x08
+	ERR_TIMEOUT = 0x09
+	ERR_INVALID_MSG = 0x0A
+	ERR_INVALID_TIME_INTERVAL = 0x0B
+	ERR_EXCEEDED_LIMIT = 0x0C
+	ERR_INVALID_MSG_ID = 0x0D
+	ERR_DEVICE_IN_USE = 0x0E
+	ERR_INVALID_IOCTL_ID = 0x0F
+	ERR_BUFFER_EMPTY = 0x10
+	ERR_BUFFER_FULL = 0x11
+	ERR_BUFFER_OVERFLOW = 0x12
+	ERR_PIN_INVALID = 0x13
+	ERR_CHANNEL_IN_USE = 0x14
+	ERR_MSG_PROTOCOL_ID = 0x15
+	ERR_INVALID_FILTER_ID = 0x16
+	ERR_NO_FLOW_CONTROL = 0x17
+	ERR_NOT_UNIQUE = 0x18
+	ERR_INVALID_BAUDRATE = 0x19
+	ERR_INVALID_DEVICE_ID = 0x1A
+	ERR_INIT_FAILED = 0x21
+	#: Tactrix: programming voltage out of range
+	ERR_OEM_VOLTAGE_TOO_HIGH = 0x77
+	ERR_OEM_VOLTAGE_TOO_LOW = 0x78
+
+class Ioctl(IntEnum):
+	GET_CONFIG = 0x01
+	SET_CONFIG = 0x02
+	READ_VBATT = 0x03
+	FIVE_BAUD_INIT = 0x04
+	FAST_INIT = 0x05
+	CLEAR_TX_BUFFER = 0x07
+	CLEAR_RX_BUFFER = 0x08
+	CLEAR_PERIODIC_MSGS = 0x09
+	CLEAR_MSG_FILTERS = 0x0A
+	READ_PROG_VOLTAGE = 0x0E
+
+class Config(IntEnum):
+	'''
+	GET_CONFIG / SET_CONFIG parameters
+	'''
+	DATA_RATE = 0x01
+	LOOPBACK = 0x03
+	P1_MAX = 0x07
+	P3_MIN = 0x0A
+	P4_MIN = 0x0C
+	W5 = 0x12
+	TIDLE = 0x13
+	TINIL = 0x14
+	TWUP = 0x15
+	ISO15765_BS = 0x1E
+	ISO15765_STMIN = 0x1F
+	ISO15765_PAD_VALUE = 0x2B
+	#: J2534-2: pins of a _PS protocol, (primary << 8) | secondary
+	J1962_PINS = 0x8001
+
+class FilterType(IntEnum):
+	PASS = 0x01
+	BLOCK = 0x02
+	FLOW_CONTROL = 0x03
+
+# connect flags
+CAN_29BIT_ID = 0x00000100
+ISO9141_NO_CHECKSUM = 0x00000200
+CAN_ID_BOTH = 0x00000800
+
+# RxStatus bits
+TX_MSG_TYPE = 0x00000001
+START_OF_MESSAGE = 0x00000002
+RX_BREAK = 0x00000004
+TX_DONE = 0x00000008
+
+# TxFlags bits
+ISO15765_FRAME_PAD = 0x00000040
+
+# PassThruSetProgrammingVoltage voltages, anything else is millivolts
+SHORT_TO_GROUND = 0xFFFFFFFE
+VOLTAGE_OFF = 0xFFFFFFFF
+
+#: largest message payload
+MSG_DATA_MAX = 4128
+#: CAN and ISO 15765 messages start with the 4 byte big endian CAN id
+CAN_ID_SIZE = 4
