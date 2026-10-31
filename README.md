@@ -3,22 +3,17 @@
 High level automotive protocol library
 
 ```
-from gkbus.hardware import CanHardware, KLineHardware
+from gkbus.device import Bus, discover
 from gkbus.protocol import kwp2000
 from gkbus.transport import Kwp2000OverKLineTransport
 
-print('available KLineHardware ports')
-ports = KLineHardware.available_ports()
-for port in ports:
-	print(f'    {port.description()}')
-
-print('available CanHardware ports')
-can_ports = CanHardware.available_ports()
-for port in can_ports:
-	print(f'    {port.description()}')
+print('available devices')
+for device in discover():
+	print(f'    {device.description()}')
 
 print('creating hardware')
-hardware = KLineHardware(ports[0].port)
+device = discover({Bus.KLINE})[0]
+hardware = device.kline() # for CAN: discover({Bus.CANBUS}) and device.canbus()
 transport = Kwp2000OverKLineTransport(hardware, tx_id=0x11, rx_id=0xf1)
 kwp = kwp2000.Kwp2000Protocol(transport)
 	

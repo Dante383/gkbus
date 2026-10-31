@@ -59,17 +59,12 @@ class CanHardware(HardwareABC):
 	"""
 
 	def __new__(cls, port: str, *args, **kwargs):
+		if cls is not CanHardware:
+			return object.__new__(cls)
 		if platform.startswith("win32"):
 			prefix = port.split(":", 1)[0] if ":" in port else ""
-			backends = {
-				CanBackend.PCAN: PcanCanHardware,
-				CanBackend.VECTOR: VectorCanHardware,
-				CanBackend.SLCAN: SlcanCanHardware,
-				CanBackend.GS_USB: GsUsbCanHardware,
-			}
 			try:
-				backend_type = CanBackend(prefix)
-				backend = backends[backend_type]
+				backend = CAN_BACKEND_HARDWARE[CanBackend(prefix)]
 			except ValueError as exc:
 				raise ValueError(
 					f"Unsupported CAN interface: {prefix or port}"
@@ -329,6 +324,17 @@ class GsUsbCanHardware(CanHardware):
 		)
 
 
+CAN_BACKEND_HARDWARE: dict[CanBackend, type[CanHardware]] = {
+	CanBackend.PCAN: PcanCanHardware,
+	CanBackend.VECTOR: VectorCanHardware,
+	CanBackend.SLCAN: SlcanCanHardware,
+	CanBackend.GS_USB: GsUsbCanHardware,
+}
+
+#: USB (VID, PID) of serial devices speaking slcan
+SLCAN_USB_IDS: dict[tuple[int, int], str] = {(0xAD50, 0x60C4): "CANable"}
+
+
 def _initialize_gs_usb_backend() -> None:
 	"""Load system libusb or the packaged Windows DLL before gs_usb scans."""
 	from usb.backend import libusb1
@@ -382,9 +388,8 @@ def _available_ports_windows() -> list[HardwarePort]:
 
 	try:
 		from serial.tools import list_ports
-		supported_slcan_devices = {(0xAD50, 0x60C4): "CANable"}
 		for device in list_ports.comports():
-			manufacturer = supported_slcan_devices.get((device.vid, device.pid))
+			manufacturer = SLCAN_USB_IDS.get((device.vid, device.pid))
 			if manufacturer is not None:
 				ports.append(HardwarePort(
 					port=f"slcan:{device.device}",
@@ -411,7 +416,7 @@ def _available_ports_windows() -> list[HardwarePort]:
 			ports.append(HardwarePort(
 				port=f"gs_usb:{channel}",
 				port_name=product,
-				serial_number=product,
+				serial_number=serial_number,
 				manufacturer=manufacturer,
 			))
 
