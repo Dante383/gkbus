@@ -10,10 +10,10 @@ from .socketcan import SocketCanDevice
 
 logger = logging.getLogger(__name__)
 
-#: every known device type, in the order find_device() asks them - most specific first,
-#: serial ports last since anything could be one
+#: every known device type, in the order discover() lists them. J2534 goes last: a J2534
+#: driver doesn't mean its adapter is plugged in, and on Windows that can't be told
 DEVICE_TYPES: list[type[DeviceABC]] = [
-	J2534Device, PythonCanDevice, SocketCanDevice, SerialKLineDevice,
+	PythonCanDevice, SocketCanDevice, SerialKLineDevice, J2534Device,
 ]
 
 def discover (buses: Iterable[Bus] | None = None) -> list[DeviceABC]:
@@ -49,7 +49,8 @@ def find_device (port: str, buses: Iterable[Bus] | None = None) -> DeviceABC:
 	:raises DeviceException: no device type recognises the port
 	'''
 	wanted = frozenset(Bus) if buses is None else frozenset(buses)
-	for device_type in DEVICE_TYPES:
+	# serial ports are asked last, since anything could be one
+	for device_type in sorted(DEVICE_TYPES, key=lambda x: issubclass(x, SerialKLineDevice)):
 		if not device_type.buses & wanted:
 			continue
 		device = device_type.from_port(port)

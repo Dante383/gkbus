@@ -1,5 +1,6 @@
 import errno
 import os
+from types import SimpleNamespace
 
 import pyroute2
 import pytest
@@ -8,12 +9,15 @@ from serial.tools.list_ports_common import ListPortInfo
 
 from gkbus.device import (
 	Bus,
+	J2534Device,
 	ObdPin,
 	PythonCanDevice,
 	SerialKLineChannel,
 	SerialKLineDevice,
 	SocketCanChannel,
 	SocketCanDevice,
+	discover,
+	discovery,
 	find_device,
 )
 from gkbus.device.python_can import PythonCanChannel
@@ -200,6 +204,23 @@ def test_find_device (can_interfaces: object) -> None:
 	assert isinstance(find_device('can0', buses={Bus.KLINE}), SerialKLineDevice)
 	with pytest.raises(DeviceException):
 		find_device('/dev/ttyUSB0', buses={Bus.CANBUS})
+
+def test_discover_lists_j2534_last (monkeypatch: pytest.MonkeyPatch) -> None:
+	for device_type in discovery.DEVICE_TYPES:
+		found = [SimpleNamespace(type=device_type, buses=device_type.buses)]
+		monkeypatch.setattr(device_type, 'discover', lambda found=found: found)
+	assert [x.type for x in discover()] == [
+		PythonCanDevice, SocketCanDevice, SerialKLineDevice, J2534Device,
+	]
+	assert [x.type for x in discover({Bus.KLINE})] == [SerialKLineDevice, J2534Device]
+
+def test_find_device_asks_serial_last (monkeypatch: pytest.MonkeyPatch) -> None:
+	# J2534 is listed after serial ports, but a serial port would take its port string
+	j2534 = SimpleNamespace()
+	monkeypatch.setattr(
+		J2534Device, 'from_port', lambda port: j2534 if port.startswith('j2534') else None,
+	)
+	assert find_device('j2534:openport') is j2534
 
 class FakeNetlink:
 	'''
