@@ -51,33 +51,14 @@ Supported hardware
     * - CAN bus
       - On Linux, anything that shows up as a SocketCAN network interface, using the kernel ISO-TP module. On Windows, PCAN, Vector, slcan and GS-USB (CANable) adapters through python-can. Other python-can interfaces can be used with ``find_device('interface:channel')``
 
-Installing 
-===========
+Installing
+==========
 
-GKBus is available on PyPi:
+GKBus is available on PyPI:
 
-```console
-$ python -m pip install gkbus
-```
+.. code-block:: console
 
-API Reference available on [Read the Docs](https://gkbus.readthedocs.io)
-========================================================================
-
-.. automodule:: gkbus.device
-    :members:
-    :imported-members:
-
-.. automodule:: gkbus.channel
-    :members:
-    :imported-members:
-
-.. automodule:: gkbus.transport
-    :members:
-    :imported-members:
-
-.. automodule:: gkbus.protocol
-    :members:
-    :imported-members: 
+    $ python -m pip install gkbus
 
 Overview
 =========
@@ -88,7 +69,16 @@ GKBus operates on these layers:
 - Channel - one bus on a device, ``device.kline()`` or ``device.canbus()``. Reads and writes bytes (K-Line) or frames (CAN)
 - Transport - turns protocol PDUs into what goes over the channel (K-Line framing, ISO-TP). Opens the channel if it isn't open yet and then closes it too - a channel you opened yourself stays open
 - Protocol - KWP2000, CCP
-[...]
+
+.. toctree::
+    :maxdepth: 2
+    :caption: API reference
+
+    api/device
+    api/channel
+    api/transport
+    api/protocol
+    api/exceptions
 
 Indices and tables
 ==================

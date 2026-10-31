@@ -1,6 +1,0 @@
-﻿gkbus
-=====
-
-.. automodule:: gkbus
-
-   

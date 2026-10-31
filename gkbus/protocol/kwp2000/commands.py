@@ -169,15 +169,15 @@ class StartDiagnosticSession(Kwp2000Command):
 	Start diagnostic session on the ECU. 
 
 	- By default, Normal/Default session (0x81) is automatically enabled by the ECU,
-	but not if the ECU entered the Passive Session (0x90) before powering down.
+	  but not if the ECU entered the Passive Session (0x90) before powering down.
 	- ECU will return to Normal/Default session (0x81) after timeout 
-	of another diagnostic session 
+	  of another diagnostic session 
 	- A positive response will be returned if the requested session was already active
 	- ECU will stay in it's previous session if the requested session is 
-	unable to be activated
+	  unable to be activated
 	- Sessions Flash Reprogramming (0x85), Stand By (0x89), Extended Diagnostic (0x92)
-	must be kept active with TesterPresent (0x3E) service if no other diagnostic 
-	messages are sent within P3 max (see timing parameters)
+	  must be kept active with TesterPresent (0x3E) service if no other diagnostic 
+	  messages are sent within P3 max (see timing parameters)
 	'''
 
 	service_identifier = 0x10

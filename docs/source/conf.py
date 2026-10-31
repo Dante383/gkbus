@@ -1,6 +1,5 @@
-import os
 import sys
-from os.path import abspath, join, dirname, normpath
+from os.path import abspath, dirname, join, normpath
 
 sys.path.insert(0, normpath(abspath(join(dirname(__file__), '..', '..'))))
 
@@ -18,7 +17,6 @@ extensions = [
 	'sphinx.ext.intersphinx',
 	'sphinx.ext.todo',
 	'sphinx.ext.viewcode',
-    'sphinx.ext.autosummary',
 ]
 
 #intersphinx_disabled_domains = ['std']
@@ -38,7 +36,7 @@ language = 'en'
 
 pygments_style = 'sphinx'
 
-autosummary_generate = True
+autodoc_member_order = 'bysource'
 
 nitpick_ignore = [('py:class', 'type')] # @todo take a closer look
 
