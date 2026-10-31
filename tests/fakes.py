@@ -141,13 +141,19 @@ class FakeJ2534Library:
 	J2534Library with an OpenPort-like adapter behind it: firmware channel numbers are the
 	channel ids, filters are byte masks and raw CAN frames we send come back through an open
 	filter, like on a real bus. `ecu` gets every written message and returns the messages
-	it answers with. Set fail[function name] to a status to make that function fail
+	it answers with. Set fail[function name] to a status to make that function fail.
+	Grounding pins follows openport-j2534: a pin can't be grounded under an open channel
+	using it, nor a channel opened on a grounded pin
 	'''
 
 	CHANNEL_IDS: ClassVar[dict[int, int]] = {
 		Protocol.ISO9141: 3, Protocol.ISO14230: 4, Protocol.CAN: 5, Protocol.ISO15765: 6,
 		Protocol.ISO14230_CH2: 8,
 	}
+	#: channel id: the OBD pin it drives - the OpenPort's K and L line channels
+	CHANNEL_PINS: ClassVar[dict[int, int]] = {3: 7, 4: 7, 8: 15}
+	#: pins the OpenPort can short to ground
+	GROUNDABLE = frozenset({1, 3, 7, 9, 10, 11, 12, 13, 15})
 	KLINE_PROTOCOLS = frozenset({
 		Protocol.ISO9141, Protocol.ISO14230, Protocol.ISO14230_CH2, Protocol.ISO14230_PS,
 	})
@@ -164,6 +170,7 @@ class FakeJ2534Library:
 		self.channels: dict[int, FakeJ2534Channel] = {}
 		self.written: list[J2534Message] = []
 		self.grounded: set[int] = set()
+		self.groundable = set(self.GROUNDABLE)
 		#: protocol: channel id, add ISO14230_PS for an adapter that switches pins
 		self.channel_ids = dict(self.CHANNEL_IDS)
 		#: (protocol, parameter) SET_CONFIG refuses, e.g. an adapter that can't change the rate
@@ -205,7 +212,7 @@ class FakeJ2534Library:
 		if protocol not in self.channel_ids:
 			raise error_for('PassThruConnect', Status.ERR_INVALID_PROTOCOL_ID)
 		channel_id = self.channel_ids[protocol]
-		if channel_id in self.channels:
+		if channel_id in self.channels or self.CHANNEL_PINS.get(channel_id) in self.grounded:
 			raise error_for('PassThruConnect', Status.ERR_CHANNEL_IN_USE)
 		self.channels[channel_id] = FakeJ2534Channel(protocol, flags, baudrate)
 		return channel_id
@@ -298,6 +305,10 @@ class FakeJ2534Library:
 	def set_programming_voltage (self, device_id: int, pin: int, voltage: int) -> None:
 		self._call('set_programming_voltage', pin, voltage)
 		if voltage == SHORT_TO_GROUND:
+			if pin not in self.groundable:
+				raise error_for('PassThruSetProgrammingVoltage', Status.ERR_PIN_INVALID)
+			if any(self.CHANNEL_PINS.get(x) == pin for x in self.channels):
+				raise error_for('PassThruSetProgrammingVoltage', Status.ERR_CHANNEL_IN_USE)
 			self.grounded.add(pin)
 		elif voltage == VOLTAGE_OFF:
 			self.grounded.discard(pin)

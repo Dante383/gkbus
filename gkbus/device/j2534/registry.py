@@ -63,7 +63,9 @@ class AdapterProfile:
 
 #: any J2534 adapter - J2534-1 only guarantees grounding pin 15
 GENERIC = AdapterProfile('J2534')
-#: Tactrix OpenPort 2.0, through Tactrix's DLL or openport-j2534
+#: Tactrix OpenPort 2.0, through Tactrix's DLL or openport-j2534. Pins 7, 10 and 15 are grounded by
+#: the line drivers; 1, 3, 9, 11, 12 and 13 by the programmable voltage circuit, which some clones
+#: leave out - they acknowledge grounding those pins and leave them as they are
 OPENPORT = AdapterProfile(
 	'OpenPort 2.0',
 	usb_ids=frozenset({(0x0403, 0xCC4D)}),

@@ -1,3 +1,4 @@
+import logging
 import os
 from typing import Self
 
@@ -6,8 +7,11 @@ from serial.tools.list_ports_common import ListPortInfo
 
 from ...channel import KLineTiming
 from ..device_abc import Bus, DeviceABC
+from ..obd_pin import ObdPin
 from ..python_can.backends import SLCAN_USB_IDS
 from .serial_kline_channel import SerialKLineChannel
+
+logger = logging.getLogger(__name__)
 
 TTY_DIR = '/sys/class/tty'
 
@@ -15,7 +19,8 @@ TTY_DIR = '/sys/class/tty'
 class SerialKLineDevice(DeviceABC):
 	'''
 	K-Line adapter on a serial port (KKL cables and the like), through pyserial.
-	There's nothing to open on the device itself - the serial port is opened by the K-Line channel
+	There's nothing to open on the device itself - the serial port is opened by the K-Line channel.
+	Its wiring is fixed and it can't ground pins, so the user is asked to wire those
 	'''
 
 	buses = frozenset({Bus.KLINE})
@@ -35,18 +40,33 @@ class SerialKLineDevice(DeviceABC):
 		self.serial_number = serial_number
 
 	def kline (
-		self, baudrate: int = 10400, timing: KLineTiming | None = None,
+		self,
+		baudrate: int = 10400,
+		pin: ObdPin = ObdPin.K_LINE,
+		timing: KLineTiming | None = None,
 	) -> SerialKLineChannel:
 		'''
 		Get the K-Line channel. Opens the device (not the channel) if it wasn't open.
 		The channel isn't opened - open it yourself, or let the transport do it
 
+		:param pin: the adapter can't switch pins - for any other than 7 a warning that its
+			K-Line has to be wired to this pin is logged
 		:param timing: kept on the channel, the serial channel doesn't use it yet
 		:raises ChannelInUseException: the K-Line channel handed out earlier is still open
+		:raises ValueError: the pin is ground or battery
+		:raises DeviceException: the pin is grounded
 		'''
-		return self._hand_out(
-			Bus.KLINE, lambda: SerialKLineChannel(self.port, baudrate=baudrate, timing=timing),
+		pin = self._obd_pin(pin)
+		channel = self._hand_out(
+			Bus.KLINE,
+			lambda: SerialKLineChannel(self.port, baudrate=baudrate, pin=pin, timing=timing),
+			pins=frozenset({pin}),
 		)
+		if pin != ObdPin.K_LINE:
+			logger.warning('{} can\'t switch pins, make sure its K-Line is wired to {}'.format(
+				self.description(), pin
+			))
+		return channel
 
 	def description (self) -> str:
 		details = ' '.join([x for x in [self.manufacturer, self.serial_number] if x])

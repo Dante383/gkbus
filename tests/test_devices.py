@@ -8,6 +8,7 @@ from serial.tools.list_ports_common import ListPortInfo
 
 from gkbus.device import (
 	Bus,
+	ObdPin,
 	PythonCanDevice,
 	SerialKLineChannel,
 	SerialKLineDevice,
@@ -88,6 +89,82 @@ def test_device_close_closes_channels () -> None:
 	channel.open()
 	device.close()
 	assert not channel.is_open() and not device.is_open()
+
+def test_serial_kline_pin (caplog: pytest.LogCaptureFixture) -> None:
+	'''
+	A serial adapter can't switch pins: it says where its K-Line has to go and carries on
+	'''
+	device = SerialKLineDevice('loop://')
+	assert device.kline_pins() == frozenset()
+	assert device.kline().pin == ObdPin.K_LINE
+	assert caplog.records == []
+
+	channel = device.kline(pin=15)
+	assert channel.pin is ObdPin.L_LINE
+	assert caplog.messages == [
+		'loop:// can\'t switch pins, make sure its K-Line is wired to OBD pin 15',
+	]
+	for pin in (ObdPin.SIGNAL_GROUND, ObdPin.BATTERY, 17):
+		with pytest.raises(ValueError):
+			device.kline(pin=pin)
+
+def test_manual_grounding (caplog: pytest.LogCaptureFixture) -> None:
+	'''
+	A device that can't ground pins asks the user to, and tells them when to stop
+	'''
+	device = SerialKLineDevice('loop://')
+	assert device.groundable_pins() == frozenset()
+	assert device.ground_pin(ObdPin.PIN_9) is False
+	assert device.is_open()
+	assert device.ground_pin(9) is False
+	assert caplog.messages == ['Connect OBD pin 9 to ground: loop:// can\'t ground it']
+	assert device.grounded_pins == frozenset()
+
+	# K-Line on a pin the user was asked to ground
+	with pytest.raises(DeviceException, match='OBD pin 9 is grounded'):
+		device.kline(pin=ObdPin.PIN_9)
+	with pytest.raises(ValueError, match='OBD pin 16 is battery positive'):
+		device.ground_pin(ObdPin.BATTERY)
+	with pytest.raises(ValueError, match='OBD pin 4 is ground'):
+		device.ground_pin(4)
+
+	caplog.clear()
+	device.release_pin(ObdPin.PIN_9)
+	device.release_pin(ObdPin.PIN_9)
+	device.release_pin(ObdPin.PIN_12)
+	assert caplog.messages == ['OBD pin 9 can be disconnected from ground']
+
+	# released on close
+	device.ground_pin(ObdPin.PIN_12)
+	caplog.clear()
+	device.close()
+	assert caplog.messages == ['OBD pin 12 can be disconnected from ground']
+
+def test_grounding_pin_of_open_channel () -> None:
+	device = SerialKLineDevice('loop://')
+	channel = device.kline(pin=ObdPin.L_LINE)
+	channel.open()
+	with pytest.raises(DeviceException, match='OBD pin 15 is used by the open kline channel'):
+		device.ground_pin(ObdPin.L_LINE)
+	assert device.ground_pin(ObdPin.K_LINE) is False
+	channel.close()
+	assert device.ground_pin(ObdPin.L_LINE) is False
+	device.close()
+
+def test_grounded_context (caplog: pytest.LogCaptureFixture) -> None:
+	device = SerialKLineDevice('loop://')
+	device.ground_pin(ObdPin.PIN_9)
+	caplog.clear()
+	with device.grounded(ObdPin.PIN_9, ObdPin.PIN_12) as manual:
+		assert manual == {ObdPin.PIN_9, ObdPin.PIN_12}
+		assert caplog.messages == ['Connect OBD pin 12 to ground: loop:// can\'t ground it']
+	# pin 9 was grounded before, it stays
+	assert caplog.messages[1:] == ['OBD pin 12 can be disconnected from ground']
+
+	caplog.clear()
+	with pytest.raises(ValueError), device.grounded(ObdPin.PIN_12, ObdPin.BATTERY):
+		pass
+	assert caplog.messages[1:] == ['OBD pin 12 can be disconnected from ground']
 
 def test_python_can_from_port () -> None:
 	device = PythonCanDevice.from_port('pcan:PCAN_USBBUS1')

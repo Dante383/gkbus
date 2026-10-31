@@ -21,6 +21,7 @@ from gkbus.device.j2534.constants import (
 	CAN_ID_BOTH,
 	ISO9141_NO_CHECKSUM,
 	ISO15765_FRAME_PAD,
+	VOLTAGE_OFF,
 	Config,
 	FilterType,
 	Ioctl,
@@ -792,3 +793,128 @@ def test_kline_and_can_together (openport: J2534Device, kline_adapter: FakeJ2534
 	assert set(kline_adapter.channels) == {4, 5}
 	openport.close()
 	assert not kline.is_open() and not can.is_open() and not kline_adapter.device_open
+
+# --- pins ---
+
+def test_pins_of_adapters (adapter: FakeJ2534Library) -> None:
+	openport, generic = J2534Device(OPENPORT_INFO), J2534Device(GENERIC_INFO)
+	assert openport.kline_pins() == {ObdPin.K_LINE, ObdPin.L_LINE}
+	assert generic.kline_pins() == {ObdPin.K_LINE}
+	assert openport.groundable_pins() == registry.OPENPORT.groundable_pins
+	assert generic.groundable_pins() == {ObdPin.L_LINE}
+	can_only = dataclasses.replace(GENERIC_INFO, buses=frozenset({Bus.CANBUS}))
+	assert J2534Device(can_only).kline_pins() == frozenset()
+
+def test_kline_on_another_pin (openport: J2534Device, kline_adapter: FakeJ2534Library) -> None:
+	channel = openport.kline(pin=15)
+	assert channel.pin is ObdPin.L_LINE
+	channel.open()
+	assert set(kline_adapter.channels) == {8}
+	with pytest.raises(ValueError):
+		openport.kline(pin=ObdPin.BATTERY)
+
+def test_ground_pins (openport: J2534Device, adapter: FakeJ2534Library) -> None:
+	assert openport.ground_pin(ObdPin.PIN_9) is True
+	assert openport.is_open()
+	assert openport.ground_pin(12) is True
+	assert openport.ground_pin(ObdPin.PIN_13) is True
+	assert openport.ground_pin(ObdPin.PIN_13) is True
+	assert adapter.grounded == {9, 12, 13}
+	assert openport.grounded_pins == {ObdPin.PIN_9, ObdPin.PIN_12, ObdPin.PIN_13}
+	assert len(adapter.calls_to('set_programming_voltage')) == 3
+
+	openport.release_pin(ObdPin.PIN_12)
+	openport.release_pin(ObdPin.PIN_12)
+	assert adapter.grounded == {9, 13}
+	assert openport.grounded_pins == {ObdPin.PIN_9, ObdPin.PIN_13}
+
+	# released before the adapter is
+	adapter.calls.clear()
+	openport.close()
+	assert [x[0] for x in adapter.calls] == [
+		'set_programming_voltage', 'set_programming_voltage', 'close',
+	]
+	assert {x[1] for x in adapter.calls_to('set_programming_voltage')} == {VOLTAGE_OFF}
+	assert adapter.grounded == set() and openport.grounded_pins == frozenset()
+
+def test_ground_pin_the_adapter_cant (
+	openport: J2534Device, adapter: FakeJ2534Library, caplog: pytest.LogCaptureFixture,
+) -> None:
+	assert openport.ground_pin(ObdPin.PIN_2) is False
+	assert caplog.messages == [
+		'Connect OBD pin 2 to ground: J2534 OpenPort 2.0 (Tactrix), firmware 1.17.4877 '
+		'can\'t ground it',
+	]
+	assert openport.grounded_pins == frozenset()
+	adapter.fail['set_programming_voltage'] = Status.ERR_NOT_SUPPORTED
+	assert openport.ground_pin(ObdPin.PIN_3) is False
+
+	del adapter.fail['set_programming_voltage']
+	caplog.clear()
+	adapter.calls.clear()
+	openport.close()
+	assert sorted(caplog.messages) == [
+		'OBD pin 2 can be disconnected from ground', 'OBD pin 3 can be disconnected from ground',
+	]
+	assert adapter.calls_to('set_programming_voltage') == []
+
+def test_ground_pin_used_by_channel (
+	openport: J2534Device, kline_adapter: FakeJ2534Library,
+) -> None:
+	kline, can = openport.kline(), openport.canbus()
+	kline.open()
+	can.open()
+	for pin in (ObdPin.K_LINE, ObdPin.CAN_HIGH, ObdPin.CAN_LOW):
+		with pytest.raises(DeviceException, match='used by the open'):
+			openport.ground_pin(pin)
+	assert kline_adapter.calls_to('set_programming_voltage') == []
+
+	# a pin the adapter knows is in use
+	kline_adapter.fail['set_programming_voltage'] = Status.ERR_CHANNEL_IN_USE
+	with pytest.raises(DeviceException, match='OBD pin 15 is used by an open channel'):
+		openport.ground_pin(ObdPin.L_LINE)
+	assert openport.grounded_pins == frozenset()
+
+	del kline_adapter.fail['set_programming_voltage']
+	kline.close()
+	assert openport.ground_pin(ObdPin.K_LINE) is True
+
+def test_kline_on_grounded_pin (openport: J2534Device, kline_adapter: FakeJ2534Library) -> None:
+	openport.ground_pin(ObdPin.L_LINE)
+	with pytest.raises(DeviceException, match='OBD pin 15 is grounded'):
+		openport.kline(pin=ObdPin.L_LINE)
+	openport.kline().open()
+	assert set(kline_adapter.channels) == {4}
+
+	# grounded after the channel was handed out: the adapter refuses
+	openport.close()
+	channel = openport.kline()
+	openport.ground_pin(ObdPin.K_LINE)
+	with pytest.raises(OpeningChannelException):
+		channel.open()
+
+def test_ground_failures (
+	openport: J2534Device, adapter: FakeJ2534Library, caplog: pytest.LogCaptureFixture,
+) -> None:
+	adapter.fail['set_programming_voltage'] = Status.ERR_FAILED
+	with pytest.raises(J2534Error):
+		openport.ground_pin(ObdPin.PIN_9)
+	assert openport.grounded_pins == frozenset()
+
+	del adapter.fail['set_programming_voltage']
+	openport.ground_pin(ObdPin.PIN_9)
+	adapter.fail['set_programming_voltage'] = Status.ERR_FAILED
+	with pytest.raises(J2534Error):
+		openport.release_pin(ObdPin.PIN_9)
+	assert openport.grounded_pins == {ObdPin.PIN_9}
+	openport.close()
+	assert caplog.messages[0].startswith('Releasing OBD pin 9 failed')
+	assert not openport.is_open() and not adapter.device_open
+	assert openport.grounded_pins == frozenset()
+
+def test_grounded_context_on_adapter (openport: J2534Device, adapter: FakeJ2534Library) -> None:
+	with openport.grounded(ObdPin.PIN_9, ObdPin.PIN_2, ObdPin.PIN_12) as manual:
+		assert manual == {ObdPin.PIN_2}
+		assert adapter.grounded == {9, 12}
+	assert adapter.grounded == set()
+	assert openport.grounded_pins == frozenset()
