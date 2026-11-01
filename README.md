@@ -81,9 +81,11 @@ Code written against a channel doesn't care which adapter is behind it.
 - The serial channel honors P3_MIN (the pause before each request) from `KLineTiming` and
   sends request bytes back to back. The 60 ms default is safe for the SIMK43 in the default
   session; after negotiating shorter timing with `AccessTimingParameters`, call
-  `channel.set_timing(KLineTiming(p3_min=...))` to speed bulk reads up (keep a small floor,
-  ~5 ms - the ECU NAKs requests that arrive too soon). At 125000 baud this took a full
-  254-byte read from ~140 ms down to ~40 ms on an FTDI cable
+  `channel.set_timing(KLineTiming(p3_min=...))` to speed bulk reads up. Keep a margin floor:
+  the SIMK43 advertises p3min=0 but drops requests that arrive too soon after its response
+  (measured on the bench: 7 ms fails, 10 ms works), so ~20 ms gives ~2x headroom. At 125000
+  baud a ~20 ms floor cuts a full 254-byte read from ~140 ms to ~50 ms (~10 ms reaches ~40 ms
+  but with little margin) on an FTDI cable
 - FTDI adapters buffer for 16 ms by default (the latency timer). gkbus drops it to 1 ms while
   the port is open - no privileges needed on Linux, and it's restored on close. On Windows,
   lower it by hand in Device Manager - the adapter's COM port - Advanced - Latency Timer, or
