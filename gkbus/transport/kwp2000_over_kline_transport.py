@@ -11,6 +11,12 @@ FAST_INIT_DRAIN_TIMEOUT = 0.4
 #: most frames drained after fast init
 FAST_INIT_DRAIN_FRAMES = 3
 
+
+def _debug (msg: str) -> None:
+	if logger.isEnabledFor(logging.DEBUG):
+		logger.debug(msg)
+
+
 class Kwp2000OverKLineTransport (TransportABC):
 	'''
 	KWP2000 over K-Line (ISO 14230): every PDU is wrapped in a frame with a length byte,
@@ -48,7 +54,7 @@ class Kwp2000OverKLineTransport (TransportABC):
 		# more than 127 bytes incoming, counter overflowed. counter is gonna come after IDs
 		if (counter == 0x80):
 			counter = frame[3]+1
-			logger.debug('More than 127 bytes incoming: {}'.format(counter))
+			_debug('More than 127 bytes incoming: {}'.format(counter))
 		else:
 			counter = counter-0x80
 			# frame[3] == python would automatically convert it to int. frame[3:4] == byte slice
@@ -105,11 +111,11 @@ class Kwp2000OverKLineTransport (TransportABC):
 		return payload
 
 	def _write (self, data: bytes) -> int:
-		logger.debug('K-Line sending: {}'.format(' '.join([hex(x) for x in list(data)])))
+		_debug('K-Line sending: {}'.format(' '.join([hex(x) for x in list(data)])))
 		return self.channel.write(data)
 
 	def _read (self, length: int, timeout: float) -> bytes:
-		logger.debug('K-Line trying to read {} bytes'.format(length))
+		_debug('K-Line trying to read {} bytes'.format(length))
 		data = self.channel.read(length, timeout)
-		logger.debug('K-Line success: {}'.format(' '.join([hex(x) for x in list(data)])))
+		_debug('K-Line success: {}'.format(' '.join([hex(x) for x in list(data)])))
 		return data
