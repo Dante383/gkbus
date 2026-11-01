@@ -14,15 +14,25 @@ logger = logging.getLogger(__name__)
 FAST_INIT_RESPONSE_TIMEOUT = 0.4
 #: first byte most adapters leave in the buffer after a fast init that worked
 FAST_INIT_EXPECTED_RESPONSES = (b'\x00', b'\x81', b'\xC1')
+#: timing offsets fast init is retried with, in turn, while the response looks off
+FAST_INIT_RETRY_OFFSETS_MS = (-2, 2)
 #: time to wait for the echo on top of the time it takes to transmit the bytes
 ECHO_TIMEOUT_MARGIN = 1.0
-#: time to wait for the output buffer to drain on top of the time it takes to transmit the bytes
-TX_DRAIN_MARGIN = 0.1
+#: longest single wait on the port, longer reads are made of several. Changing the port's
+#: timeout reconfigures the port - on USB adapters that's control transfers (2 ms a change with
+#: an FTDI on Linux, at K-Line baudrates) in the middle of the traffic - so it's left alone
+#: except when a read runs into its timeout
+READ_SLICE = 0.1
 
 class SerialKLineChannel(KLineChannel):
 	'''
 	K-Line through a serial port (KKL cables and the like), using pyserial.
-	Any pyserial URL works as the port too, e.g. loop:// for testing
+	Any pyserial URL works as the port too, e.g. loop:// for testing.
+
+	Of the timing, P3_MIN is kept: a request goes out no sooner than P3_MIN after the last byte
+	came in. That's measured when the bytes reach us, which is always a bit after they were on
+	the bus, so the gap on the bus is never shorter. Requests are sent back to back (P4 = 0)
+	and responses are read by their length, so P1_MAX and P4_MIN aren't used
 	'''
 
 	def __init__ (
@@ -35,20 +45,21 @@ class SerialKLineChannel(KLineChannel):
 		'''
 		:param port: serial port, for example /dev/ttyUSB0 or COM3
 		:param pin: OBD pin the adapter's K-Line is wired to, just recorded
-		:param timing: kept, not used yet - the timing is up to the serial adapter
+		:param timing: only P3_MIN is used, see the class description
 		'''
 		super().__init__(baudrate, timing)
 		self.port = port
 		self.pin = ObdPin(pin)
 		self._serial: serial.SerialBase | None = None
+		self._low_latency = False
+		#: when the last bytes came in (time.perf_counter()), P3_MIN is counted from it
+		self._last_rx = 0.0
 
 	def open (self) -> None:
 		if self._serial is not None:
 			return
 		try:
-			self._serial = serial.serial_for_url(
-				self.port, self.baudrate, timeout=FAST_INIT_RESPONSE_TIMEOUT
-			)
+			self._serial = serial.serial_for_url(self.port, self.baudrate, timeout=READ_SLICE)
 		except serial.SerialException as e:
 			raise OpeningChannelException(e) from e
 
@@ -58,6 +69,7 @@ class SerialKLineChannel(KLineChannel):
 		except (serial.SerialException, OSError) as e:
 			self.close()
 			raise OpeningChannelException(e) from e
+		self._low_latency = self._set_low_latency(True)
 
 	def is_open (self) -> bool:
 		return self._serial is not None
@@ -65,6 +77,9 @@ class SerialKLineChannel(KLineChannel):
 	def close (self) -> None:
 		if self._serial is None:
 			return
+		if self._low_latency:
+			self._set_low_latency(False)
+			self._low_latency = False
 		port, self._serial = self._serial, None
 		try:
 			port.break_condition = False
@@ -82,18 +97,13 @@ class SerialKLineChannel(KLineChannel):
 		return data
 
 	def write (self, data: bytes) -> int:
+		'''
+		Sent once P3_MIN has passed since the last byte came in. Returns once the echo is back,
+		which also means the bytes are out
+		'''
 		port = self._port()
-		# @todo - this timeout is needed for now, otherwise
-		# we'll get a timeout when trying to start diagnostic session
-		# find out _why_ is it needed - some magic value instead
-		# of something calculated shouldnt be required here
-		time.sleep((50/1000)*2)
+		self._wait_p3()
 		bytes_written = port.write(data)
-
-		# bounded, so a stuck adapter can't hang us - the echo read below has its own timeout
-		drain_deadline = time.monotonic() + self._transmission_time(bytes_written) + TX_DRAIN_MARGIN
-		while port.out_waiting > 0 and time.monotonic() < drain_deadline:
-			time.sleep(0.001)
 
 		echo = self._read(bytes_written, self._echo_timeout(bytes_written))
 		if (echo != data):
@@ -117,15 +127,16 @@ class SerialKLineChannel(KLineChannel):
 
 	def fast_init (self, payload: bytes) -> bytes:
 		'''
-		Bit-banged fast init. If the response looks off, it's retried 2ms shorter and 2ms longer -
-		the timing of cheap adapters isn't exact
+		Bit-banged fast init. If the response looks off, it's retried 2ms longer, then 2ms
+		shorter - the timing of cheap adapters isn't exact
 		'''
 		response = self._fast_init(payload, timing_offset_ms=0)
 		# @todo: find out if there is some way to self-test and automatically measure
 		# the timing offset we should apply
-		if response[0:1] not in FAST_INIT_EXPECTED_RESPONSES:
-			response = self._fast_init(payload, timing_offset_ms=-2)
-			response = self._fast_init(payload, timing_offset_ms=2)
+		for offset in FAST_INIT_RETRY_OFFSETS_MS:
+			if response[0:1] in FAST_INIT_EXPECTED_RESPONSES:
+				break
+			response = self._fast_init(payload, timing_offset_ms=offset)
 		return response
 
 	def _fast_init (self, payload: bytes, timing_offset_ms: int = 0) -> bytes:
@@ -215,11 +226,51 @@ class SerialKLineChannel(KLineChannel):
 		port.rts = False
 		time.sleep(0.1)
 
+	def _set_low_latency (self, enabled: bool) -> bool:
+		'''
+		USB serial chips hold on to received bytes for a while before handing them over - the
+		FTDI latency timer, 16 ms by default. Low latency mode (Linux only, no root needed)
+		brings it down to 1 ms, so responses are in and the next request can go out sooner.
+		Windows keeps the driver's setting (Device Manager, port settings, advanced)
+
+		:return: whether the mode was changed
+		'''
+		set_mode = getattr(self._port(), 'set_low_latency_mode', None)
+		if set_mode is None:
+			return False
+		try:
+			set_mode(enabled)
+		except (ValueError, NotImplementedError, serial.SerialException, OSError) as e:
+			logger.debug('Couldn\'t set low latency mode on {}: {}'.format(self.port, e))
+			return False
+		return True
+
+	def _wait_p3 (self) -> None:
+		'''
+		Sleep until P3_MIN has passed since the last byte came in
+		'''
+		wait = self._last_rx + self.timing.p3_min / 1000 - time.perf_counter()
+		if wait > 0:
+			time.sleep(wait)
+
 	def _read (self, size: int, timeout: float) -> bytes:
+		'''
+		Up to `size` bytes - fewer if the timeout runs out first
+		'''
 		port = self._port()
-		if port.timeout != timeout:
-			port.timeout = timeout
-		return port.read(size)
+		deadline = time.perf_counter() + timeout
+		data = bytearray()
+		while True:
+			remaining = max(deadline - time.perf_counter(), 0)
+			wait = min(remaining, READ_SLICE)
+			if port.timeout != wait:
+				port.timeout = wait
+			chunk = port.read(size - len(data))
+			if chunk:
+				data += chunk
+				self._last_rx = time.perf_counter()
+			if len(data) >= size or remaining <= READ_SLICE:
+				return bytes(data)
 
 	def _echo_timeout (self, size: int) -> float:
 		return self._transmission_time(size) + ECHO_TIMEOUT_MARGIN

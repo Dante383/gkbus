@@ -1,6 +1,9 @@
 import pytest
 
+from gkbus.channel import KLineTiming
 from gkbus.device import SerialKLineChannel
+from gkbus.device.serial import serial_kline_channel
+from gkbus.device.serial.serial_kline_channel import FAST_INIT_RETRY_OFFSETS_MS
 from gkbus.exceptions import ChannelException, TimeoutException
 from gkbus.transport import Kwp2000OverKLineTransport, PacketDirection
 
@@ -104,3 +107,64 @@ def test_serial_channel_baudrate_live () -> None:
 		channel.set_baudrate(19200)
 		assert channel._port().baudrate == 19200
 		assert channel.get_baudrate() == 19200
+
+def test_wait_p3_sleeps_remaining (monkeypatch: pytest.MonkeyPatch) -> None:
+	channel = SerialKLineChannel('loop://', timing=KLineTiming(p3_min=60))
+	channel._last_rx = 100.0
+	slept: list[float] = []
+	monkeypatch.setattr(serial_kline_channel.time, 'perf_counter', lambda: 100.02)
+	monkeypatch.setattr(serial_kline_channel.time, 'sleep', lambda seconds: slept.append(seconds))
+	channel._wait_p3()
+	# 60 ms since the last byte, 20 ms already elapsed, so 40 ms is left to wait
+	assert slept == [pytest.approx(0.04)]
+
+def test_wait_p3_no_sleep_once_elapsed (monkeypatch: pytest.MonkeyPatch) -> None:
+	channel = SerialKLineChannel('loop://', timing=KLineTiming(p3_min=60))
+	channel._last_rx = 100.0
+	slept: list[float] = []
+	monkeypatch.setattr(serial_kline_channel.time, 'perf_counter', lambda: 100.5)
+	monkeypatch.setattr(serial_kline_channel.time, 'sleep', lambda seconds: slept.append(seconds))
+	channel._wait_p3()
+	assert slept == []
+
+def test_read_keeps_port_timeout_steady () -> None:
+	channel = SerialKLineChannel('loop://')
+	with channel:
+		port = channel._port()
+		reconfigures: list[int] = []
+		port._reconfigure_port = lambda: reconfigures.append(1)
+		port.write(b'\xAA\xBB')
+		assert channel._read(2, 1.0) == b'\xAA\xBB'
+		# the standing 0.1 s read timeout already matches, so the port isn't reconfigured
+		assert reconfigures == []
+		# a read shorter than one slice does have to lower the timeout, just once
+		port.write(b'\xCC')
+		assert channel._read(1, 0.05) == b'\xCC'
+		assert reconfigures == [1]
+
+def test_fast_init_stops_after_expected_response (monkeypatch: pytest.MonkeyPatch) -> None:
+	channel = SerialKLineChannel('loop://')
+	offsets: list[int] = []
+	def fake_fast_init (payload: bytes, timing_offset_ms: int = 0) -> bytes:
+		offsets.append(timing_offset_ms)
+		return b'\x00\x11\x22'
+	monkeypatch.setattr(channel, '_fast_init', fake_fast_init)
+	assert channel.fast_init(b'\x81\x10\xF1\x81\x03') == b'\x00\x11\x22'
+	assert offsets == [0]
+
+def test_fast_init_retries_on_bad_response (monkeypatch: pytest.MonkeyPatch) -> None:
+	channel = SerialKLineChannel('loop://')
+	offsets: list[int] = []
+	def fake_fast_init (payload: bytes, timing_offset_ms: int = 0) -> bytes:
+		offsets.append(timing_offset_ms)
+		return b'\xFF\xFF'
+	monkeypatch.setattr(channel, '_fast_init', fake_fast_init)
+	channel.fast_init(b'\x81\x10\xF1\x81\x03')
+	assert offsets == [0, *FAST_INIT_RETRY_OFFSETS_MS]
+
+def test_open_without_low_latency_support () -> None:
+	# loop:// has no set_low_latency_mode, open() must still succeed and note it's off
+	channel = SerialKLineChannel('loop://')
+	with channel:
+		assert channel._low_latency is False
+	assert not channel.is_open()

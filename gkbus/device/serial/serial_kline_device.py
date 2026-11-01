@@ -52,7 +52,7 @@ class SerialKLineDevice(DeviceABC):
 
 		:param pin: the adapter can't switch pins - for any other than 7 a warning that its
 			K-Line has to be wired to this pin is logged
-		:param timing: kept on the channel, the serial channel doesn't use it yet
+		:param timing: kept on the channel; the serial channel honors P3_MIN (see KLineTiming)
 		:raises ChannelInUseException: the K-Line channel handed out earlier is still open
 		:raises ValueError: the pin is ground or battery
 		:raises DeviceException: the pin is grounded

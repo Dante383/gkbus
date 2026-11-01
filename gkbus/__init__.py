@@ -12,7 +12,7 @@ from .exceptions import (
 	TimeoutException,
 )
 
-__version__ = '0.6.1'
+__version__ = '0.6.11'
 
 __all__ = [
 	'ChannelException',

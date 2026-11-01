@@ -7,14 +7,16 @@ from .channel_abc import ChannelABC
 @dataclass(frozen=True)
 class KLineTiming:
 	'''
-	ISO 14230 timing, in milliseconds. Adapters that time the bus themselves (J2534) keep to it;
-	serial adapters don't use it yet
+	ISO 14230 timing, in milliseconds. J2534 adapters keep all of it; the serial channel keeps
+	P3_MIN (the gap before a request) and sends request bytes back to back (P4 = 0), so on
+	serial P1_MAX and P4_MIN are ignored
 
 	:param p1_max: longest gap between the bytes of an ECU response. The adapter treats a longer
 		silence as the end of the response
 	:param p3_min: shortest time from the end of an ECU response to the next request. ISO 14230
 		says 55 ms, but the SIMK43 ignores requests sent 55 ms after its response at its fast
-		baudrates (19531 baud and up), so the default is 60 ms
+		baudrates (19231 baud and up), so the default is 60 ms. After negotiating shorter timing
+		with AccessTimingParameters it can go much lower - call set_timing() to take advantage
 	:param p4_min: gap between the bytes of a request. ISO 14230 suggests 5 ms; 0 sends
 		them back to back like a serial adapter does, which every ECU tested so far accepts
 	'''

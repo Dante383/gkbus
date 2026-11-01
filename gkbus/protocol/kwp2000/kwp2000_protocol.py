@@ -82,7 +82,9 @@ class Kwp2000Protocol (ProtocolABC):
 		'''
 		try:
 			while not self._keepalive_event.is_set():
-				time.sleep(1)
+				# like a sleep, but closing doesn't have to wait it out
+				if self._keepalive_event.wait(1):
+					break
 				if not self.transport.is_open(): 
 					# this is solving a problem introduced by time.sleep 
 					# being at the beginning of the loop instead of the end

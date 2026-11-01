@@ -73,7 +73,21 @@ Code written against a channel doesn't care which adapter is behind it.
   openport-j2534, `OPENPORT_LOG=/tmp/openport.log` logs the driver's USB traffic
 - ISO-TP is done by the adapter. The OpenPort pads frames with `0x00`, not `0xCC`
 - K-Line timing (P1, P3, P4) is kept by the adapter, see `KLineTiming`. Fast baudrates work
-  with exact values, e.g. the SIMK43's 19531, 39062, 58594 and 125000
+  with exact values, e.g. the SIMK43's 19231, 39474, 57692 and 125000 (24 MHz / 16 / {78, 38,
+  26, 12})
+
+### Serial K-Line
+
+- The serial channel honors P3_MIN (the pause before each request) from `KLineTiming` and
+  sends request bytes back to back. The 60 ms default is safe for the SIMK43 in the default
+  session; after negotiating shorter timing with `AccessTimingParameters`, call
+  `channel.set_timing(KLineTiming(p3_min=...))` to speed bulk reads up (keep a small floor,
+  ~5 ms - the ECU NAKs requests that arrive too soon). At 125000 baud this took a full
+  254-byte read from ~140 ms down to ~40 ms on an FTDI cable
+- FTDI adapters buffer for 16 ms by default (the latency timer). gkbus drops it to 1 ms while
+  the port is open - no privileges needed on Linux, and it's restored on close. On Windows,
+  lower it by hand in Device Manager - the adapter's COM port - Advanced - Latency Timer, or
+  it caps throughput
 
 ### OBD pins
 
