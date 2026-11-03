@@ -3,8 +3,11 @@ import threading
 import time
 from dataclasses import dataclass
 
+from ...channel import KLineChannel
 from ...exceptions import TimeoutException
 from ..protocol_abc import ProtocolABC, ProtocolException
+from .commands import AccessTimingParameters, StartDiagnosticSession
+from .enums import TimingParameterIdentifier
 from .kwp2000_command import Kwp2000Command
 from .kwp2000_negative_status import Kwp2000NegativeStatus, Kwp2000NegativeStatusIdentifierEnum
 from .kwp2000_response import Kwp2000Response, Kwp2000ResponseFrame
@@ -54,6 +57,8 @@ class Kwp2000Protocol (ProtocolABC):
 		frame = Kwp2000RequestFrame(command.get_service_identifier(), command.get_data())
 
 		with self._execute_lock:
+			if self._resets_timing(command):
+				self._reset_channel_timing()
 			response_pdu = self.transport.send_read_pdu(data=frame.to_pdu())
 			self._last_execution_time = time.time()
 
@@ -62,6 +67,31 @@ class Kwp2000Protocol (ProtocolABC):
 			)
 
 		return response
+
+	@staticmethod
+	def _resets_timing (command: Kwp2000Command) -> bool:
+		'''
+		Whether the ECU goes back to its default timing after this command
+		'''
+		sid = command.get_service_identifier()
+		if sid == StartDiagnosticSession.service_identifier:
+			return True
+		return sid == AccessTimingParameters.service_identifier \
+			and command.get_data()[:1] == bytes([TimingParameterIdentifier.SET_TIMING_PARAMETERS_TO_DEFAULT_VALUES.value])
+
+	def _reset_channel_timing (self) -> None:
+		'''
+		Timing negotiated with AccessTimingParameters only lasts until the next
+		StartDiagnosticSession: then the ECU is back on its defaults (the SIMK43 drops requests
+		sent sooner than ~55 ms after its response again). Follow it, so a short P3_MIN
+		set with set_timing() doesn't outlive the session it was negotiated in. Done before
+		sending - waiting longer is always safe, so a timeout or a negative response errs
+		on the safe side. Renegotiate and call set_timing() again to go fast in the new session
+		'''
+		channel = getattr(self.transport, 'channel', None)
+		if isinstance(channel, KLineChannel) and channel.get_timing() != channel.default_timing:
+			logger.debug('Session change, K-Line timing back to %s', channel.default_timing)
+			channel.reset_timing()
 
 	def handle_errors (self, response: Kwp2000Response) -> Kwp2000Response:
 		if response.success():

@@ -16,7 +16,8 @@ class KLineTiming:
 	:param p3_min: shortest time from the end of an ECU response to the next request. ISO 14230
 		says 55 ms, but the SIMK43 ignores requests sent 55 ms after its response at its fast
 		baudrates (19231 baud and up), so the default is 60 ms. After negotiating shorter timing
-		with AccessTimingParameters it can go much lower - call set_timing() to take advantage
+		with AccessTimingParameters it can go much lower - call set_timing() to take advantage.
+		That only lasts until the next StartDiagnosticSession, see KLineChannel.reset_timing()
 	:param p4_min: gap between the bytes of a request. ISO 14230 suggests 5 ms; 0 sends
 		them back to back like a serial adapter does, which every ECU tested so far accepts
 	'''
@@ -32,6 +33,7 @@ class KLineChannel(ChannelABC):
 	def __init__ (self, baudrate: int = 10400, timing: KLineTiming | None = None) -> None:
 		self.baudrate = baudrate
 		self.timing = timing if timing is not None else KLineTiming()
+		self.default_timing = self.timing
 
 	@abstractmethod
 	def read (self, size: int, timeout: float) -> bytes:
@@ -68,6 +70,13 @@ class KLineChannel(ChannelABC):
 
 	def get_timing (self) -> KLineTiming:
 		return self.timing
+
+	def reset_timing (self) -> None:
+		'''
+		Go back to the timing the channel was created with. KWP2000 ECUs drop negotiated
+		timing on every StartDiagnosticSession, so Kwp2000Protocol calls this before sending one
+		'''
+		self.set_timing(self.default_timing)
 
 	@abstractmethod
 	def reset_buffers (self) -> None:

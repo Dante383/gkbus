@@ -86,6 +86,11 @@ Code written against a channel doesn't care which adapter is behind it.
   (measured on the bench: 7 ms fails, 10 ms works), so ~20 ms gives ~2x headroom. At 125000
   baud a ~20 ms floor cuts a full 254-byte read from ~140 ms to ~50 ms (~10 ms reaches ~40 ms
   but with little margin) on an FTDI cable
+- Negotiated timing only lasts until the next `StartDiagnosticSession`: the ECU drops back to
+  its defaults then (the SIMK43 ignores requests sent sooner than ~55 ms after its response
+  again, even if the new session is the same). `Kwp2000Protocol` follows it and resets the
+  channel to the timing it was created with (`KLineChannel.reset_timing()`) before sending
+  one, on serial and J2534 alike. Renegotiate and call `set_timing()` again to stay fast
 - FTDI adapters buffer for 16 ms by default (the latency timer). gkbus drops it to 1 ms while
   the port is open - no privileges needed on Linux, and it's restored on close. On Windows,
   lower it by hand in Device Manager - the adapter's COM port - Advanced - Latency Timer, or
