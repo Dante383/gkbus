@@ -24,6 +24,8 @@ ECHO_TIMEOUT_MARGIN = 1.0
 #: an FTDI on Linux, at K-Line baudrates) in the middle of the traffic - so it's left alone
 #: except when a read runs into its timeout
 READ_SLICE = 0.1
+#: bound serial writes too: otherwise a stalled USB driver owns the port indefinitely
+WRITE_TIMEOUT = 2.0
 
 class SerialKLineChannel(KLineChannel):
 	'''
@@ -61,7 +63,9 @@ class SerialKLineChannel(KLineChannel):
 		if self._serial is not None:
 			return
 		try:
-			self._serial = serial.serial_for_url(self.port, self.baudrate, timeout=READ_SLICE)
+			self._serial = serial.serial_for_url(
+				self.port, self.baudrate, timeout=READ_SLICE, write_timeout=WRITE_TIMEOUT,
+			)
 		except serial.SerialException as e:
 			raise OpeningChannelException(e) from e
 
@@ -86,11 +90,19 @@ class SerialKLineChannel(KLineChannel):
 		port, self._serial = self._serial, None
 		self._paced_write_active = False
 		try:
-			port.break_condition = False
-			port.reset_input_buffer()
-			port.reset_output_buffer()
+			# Cancel both directions before close() reconfigures the port.
+			for name in ('cancel_read', 'cancel_write'):
+				cancel = getattr(port, name, None)
+				if callable(cancel):
+					try:
+						cancel()
+					except (serial.SerialException, OSError, NotImplementedError) as e:
+						logger.info('Couldn\'t {} before closing: {}'.format(name, e))
+			# Purging buffers here adds synchronous driver calls without helping cleanup.
+			if port.break_condition:
+				port.break_condition = False
 		except (serial.SerialException, OSError) as e:
-			logger.info('Couldn\'t flush socket buffer before closing: {}'.format(e))
+			logger.info('Couldn\'t cancel serial I/O before closing: {}'.format(e))
 		finally:
 			port.close()
 
@@ -175,7 +187,8 @@ class SerialKLineChannel(KLineChannel):
 		self.baudrate = baudrate
 		if self._serial is not None:
 			self._serial.baudrate = baudrate
-			self._serial.flush()
+			# Writes consume their echo before a baud handoff; flush() has no timeout
+			# and can wait forever on a stalled USB transmitter.
 
 	def reset_buffers (self) -> None:
 		port = self._port()
