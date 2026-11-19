@@ -1,7 +1,7 @@
 import logging
 
 from ..channel import KLineChannel
-from ..exceptions import TimeoutException
+from ..exceptions import ChannelException, TimeoutException
 from .transport_abc import PacketDirection, TransportABC
 
 logger = logging.getLogger(__name__)
@@ -63,6 +63,8 @@ class Kwp2000OverKLineTransport (TransportABC):
 		data_and_checksum = self._read(counter, timeout)
 		frame += data_and_checksum
 		data += data_and_checksum[:-1] # last byte is the checksum
+		if self.calculate_checksum(frame[:-1]) != frame[-1]:
+			raise ChannelException('K-Line response checksum mismatch')
 
 		self._record(PacketDirection.INCOMING, frame)
 
@@ -98,7 +100,8 @@ class Kwp2000OverKLineTransport (TransportABC):
 	def build_payload (self, data: bytes) -> bytes:
 		data_length = len(data)
 
-		if (data_length < 127):
+		# The format byte has six length bits; larger PDUs use the extra byte.
+		if (data_length < 64):
 			counter = 0x80 + data_length
 		else:
 			counter = 0x80

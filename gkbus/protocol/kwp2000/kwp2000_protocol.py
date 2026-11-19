@@ -6,7 +6,7 @@ from dataclasses import dataclass
 from ...channel import KLineChannel
 from ...exceptions import TimeoutException
 from ..protocol_abc import ProtocolABC, ProtocolException
-from .commands import AccessTimingParameters, StartDiagnosticSession
+from .commands import AccessTimingParameters, StartDiagnosticSession, ReadMemoryByAddress
 from .enums import TimingParameterIdentifier
 from .kwp2000_command import Kwp2000Command
 from .kwp2000_negative_status import Kwp2000NegativeStatus, Kwp2000NegativeStatusIdentifierEnum
@@ -59,7 +59,34 @@ class Kwp2000Protocol (ProtocolABC):
 		with self._execute_lock:
 			if self._resets_timing(command):
 				self._reset_channel_timing()
-			response_pdu = self.transport.send_read_pdu(data=frame.to_pdu())
+			channel = getattr(self.transport, 'channel', None)
+			guarded_read = (isinstance(command, ReadMemoryByAddress)
+				and isinstance(channel, KLineChannel) and channel.get_timing().p4_max is not None)
+			for attempt in range(3 if guarded_read else 1):
+				try:
+					if guarded_read:
+						# A stall on the final checksum byte cannot be caught before the
+						# frame is complete. Only memory reads are safe to replay here.
+						self.transport.send_pdu(frame.to_pdu())
+						# A full reply alone takes 250 ms at 10400 baud. Include
+						# wire time and processing margin instead of timing it out.
+						wire_time = (command.get_data()[-1] + 6) * 10 / channel.get_baudrate()
+						response_pdu = self.transport.read_pdu(
+							timeout=min(0.25 + 2 * wire_time, self.transport.get_timeout()))
+						if response_pdu[:1] != b'\x7f' and (response_pdu[:1] != b'\x63'
+							or len(response_pdu) != command.get_data()[-1] + 1):
+							raise Kwp2000Exception('Unexpected memory-read response')
+					else:
+						response_pdu = self.transport.send_read_pdu(data=frame.to_pdu())
+					break
+				except TimeoutException as exc:
+					if not guarded_read:
+						raise
+					if attempt == 2:
+						raise Kwp2000Exception('Memory read failed after three response attempts') from exc
+					logger.info('Retrying a lost memory-read response (%s/3)', attempt + 2)
+					time.sleep(max(0.060, channel.get_timing().p3_min / 1000))
+					channel.reset_buffers()
 			self._last_execution_time = time.time()
 
 			response = self.handle_errors(

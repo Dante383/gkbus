@@ -88,6 +88,38 @@ def test_serial_channel_consumes_echo () -> None:
 		with pytest.raises(TimeoutException):
 			channel.read(1, 0.05)
 
+@pytest.mark.parametrize('p4_min,payload', [
+	(0, b'\x81\x10\xF1'), (1, b'\x81\x10\xF1'), (5, b'\x81'), (1, b''),
+])
+def test_serial_request_byte_spacing_and_echo (
+	monkeypatch: pytest.MonkeyPatch, p4_min: float, payload: bytes
+) -> None:
+	channel = SerialKLineChannel('loop://', timing=KLineTiming(p3_min=0, p4_min=p4_min))
+	with channel:
+		port = channel._port()
+		write = port.write
+		writes: list[bytes] = []
+		sleeps: list[float] = []
+		response = b'\x7e\x01'
+		def record_write(data: bytes) -> int:
+			writes.append(data)
+			written = write(data)
+			if payload and b''.join(writes) == payload:
+				write(response)
+			return written
+		monkeypatch.setattr(port, 'write', record_write)
+		monkeypatch.setattr(serial_kline_channel.time, 'sleep', sleeps.append)
+		assert channel.write(payload) == len(payload)
+		if p4_min > 0 and len(payload) > 1:
+			assert writes == [bytes([byte]) for byte in payload]
+			assert sleeps == [p4_min / 1000] * (len(payload) - 1)
+		else:
+			assert writes == [payload]
+			assert sleeps == []
+		if payload:
+			assert channel.read(len(response), 0.05) == response
+		assert port.in_waiting == 0
+
 def test_serial_channel_fast_init_returns_input () -> None:
 	channel = SerialKLineChannel('loop://')
 	with channel:
