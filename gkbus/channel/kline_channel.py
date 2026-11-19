@@ -23,15 +23,24 @@ class KLineTiming:
 	:param p4_max: optional byte-gap guard for complete framed requests on serial. An expired
 		prefix is abandoned before the checksum and restarted after an idle gap. KWP memory
 		reads also use three bounded response attempts in this mode. None keeps normal behavior.
+	:param p4_prefix: serial-only paced prefix length, followed by unpaced bursts.
+		Use only when the receiver explicitly supports a burst after its paced header.
+	:param p4_burst_size: maximum bytes per echo-confirmed burst after that prefix.
 	'''
 	p1_max: float = 20.0
 	p3_min: float = 60.0
 	p4_min: float = 0.0
 	p4_max: float | None = None
+	p4_prefix: int | None = None
+	p4_burst_size: int = 16
 
 	def __post_init__ (self) -> None:
 		if self.p4_max is not None and not 0 <= self.p4_min < self.p4_max:
 			raise ValueError('P4 minimum must be nonnegative and less than its maximum')
+		if self.p4_prefix is not None and (self.p4_prefix < 1 or self.p4_max is None or self.p4_min <= 0):
+			raise ValueError('A paced prefix requires a positive length, gap and P4 maximum')
+		if self.p4_burst_size < 1:
+			raise ValueError('Burst size must be positive')
 
 class KLineChannel(ChannelABC):
 	'''

@@ -100,7 +100,8 @@ class Kwp2000OverKLineTransport (TransportABC):
 	def build_payload (self, data: bytes) -> bytes:
 		data_length = len(data)
 
-		if (data_length < 127):
+		# The format byte has six length bits; larger PDUs use the extra byte.
+		if (data_length < 64):
 			counter = 0x80 + data_length
 		else:
 			counter = 0x80

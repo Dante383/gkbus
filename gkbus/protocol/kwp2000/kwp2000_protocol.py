@@ -68,7 +68,11 @@ class Kwp2000Protocol (ProtocolABC):
 						# A stall on the final checksum byte cannot be caught before the
 						# frame is complete. Only memory reads are safe to replay here.
 						self.transport.send_pdu(frame.to_pdu())
-						response_pdu = self.transport.read_pdu(timeout=min(0.25, self.transport.get_timeout()))
+						# A full reply alone takes 250 ms at 10400 baud. Include
+						# wire time and processing margin instead of timing it out.
+						wire_time = (command.get_data()[-1] + 6) * 10 / channel.get_baudrate()
+						response_pdu = self.transport.read_pdu(
+							timeout=min(0.25 + 2 * wire_time, self.transport.get_timeout()))
 						if response_pdu[:1] != b'\x7f' and (response_pdu[:1] != b'\x63'
 							or len(response_pdu) != command.get_data()[-1] + 1):
 							raise Kwp2000Exception('Unexpected memory-read response')

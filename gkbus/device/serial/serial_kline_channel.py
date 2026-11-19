@@ -24,8 +24,6 @@ ECHO_TIMEOUT_MARGIN = 1.0
 #: an FTDI on Linux, at K-Line baudrates) in the middle of the traffic - so it's left alone
 #: except when a read runs into its timeout
 READ_SLICE = 0.1
-#: bound serial writes too: otherwise a stalled USB driver owns the port indefinitely
-WRITE_TIMEOUT = 2.0
 
 class SerialKLineChannel(KLineChannel):
 	'''
@@ -63,9 +61,7 @@ class SerialKLineChannel(KLineChannel):
 		if self._serial is not None:
 			return
 		try:
-			self._serial = serial.serial_for_url(
-				self.port, self.baudrate, timeout=READ_SLICE, write_timeout=WRITE_TIMEOUT,
-			)
+			self._serial = serial.serial_for_url(self.port, self.baudrate, timeout=READ_SLICE)
 		except serial.SerialException as e:
 			raise OpeningChannelException(e) from e
 
@@ -90,19 +86,11 @@ class SerialKLineChannel(KLineChannel):
 		port, self._serial = self._serial, None
 		self._paced_write_active = False
 		try:
-			# Cancel both directions before close() reconfigures the port.
-			for name in ('cancel_read', 'cancel_write'):
-				cancel = getattr(port, name, None)
-				if callable(cancel):
-					try:
-						cancel()
-					except (serial.SerialException, OSError, NotImplementedError) as e:
-						logger.info('Couldn\'t {} before closing: {}'.format(name, e))
-			# Purging buffers here adds synchronous driver calls without helping cleanup.
-			if port.break_condition:
-				port.break_condition = False
+			port.break_condition = False
+			port.reset_input_buffer()
+			port.reset_output_buffer()
 		except (serial.SerialException, OSError) as e:
-			logger.info('Couldn\'t cancel serial I/O before closing: {}'.format(e))
+			logger.info('Couldn\'t flush socket buffer before closing: {}'.format(e))
 		finally:
 			port.close()
 
@@ -162,6 +150,22 @@ class SerialKLineChannel(KLineChannel):
 						time.sleep(max(0.060, self.timing.p3_min / 1000))
 						self.reset_buffers()
 						break
+				if self.timing.p4_prefix is not None and index >= self.timing.p4_prefix:
+					# Header echoes and P4 confirm the paced prefix before the burst.
+					for offset in range(index, len(data), self.timing.p4_burst_size):
+						if time.perf_counter() - last > self.timing.p4_max / 1000:
+							# No checksum was sent: let the receiver discard this prefix.
+							logger.info('Abandoning an incomplete burst after an excessive byte gap')
+							time.sleep(max(0.100, self.timing.p3_min / 1000))
+							self.reset_buffers()
+							break
+						remaining = data[offset:offset + self.timing.p4_burst_size]
+						last = time.perf_counter() + len(remaining) * 10 / self.baudrate
+						if port.write(remaining) != len(remaining) or self._read(len(remaining), self._echo_timeout(len(remaining))) != remaining:
+							raise ChannelException('K-Line burst echo missing or different than sent payload')
+					else:
+						return len(data)
+					break
 				part = bytes([byte])
 				last = time.perf_counter()
 				if port.write(part) != 1 or self._read(1, self._echo_timeout(1)) != part:
@@ -187,8 +191,7 @@ class SerialKLineChannel(KLineChannel):
 		self.baudrate = baudrate
 		if self._serial is not None:
 			self._serial.baudrate = baudrate
-			# Writes consume their echo before a baud handoff; flush() has no timeout
-			# and can wait forever on a stalled USB transmitter.
+			self._serial.flush()
 
 	def reset_buffers (self) -> None:
 		port = self._port()
