@@ -46,6 +46,14 @@ kwp.close()
   stays open, so you can hand it from one transport to the next
 - **Protocol** - KWP2000, CCP
 
+### KWP2000 retries
+
+`execute(command, retries=2, timeout=0.5)` allows two additional attempts after a
+timeout, with a 0.5-second initial-response timeout per attempt. Both arguments
+are optional: commands are sent once by default, using the transport's timeout.
+Enable retries only when repeating the command is safe. Negative responses and
+timeouts while waiting for a response-pending result do not replay the command.
+
 ## Devices
 
 Code written against a channel doesn't care which adapter is behind it.
