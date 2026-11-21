@@ -21,8 +21,8 @@ class KLineTiming:
 	:param p4_min: gap between the bytes of a request. ISO 14230 suggests 5 ms; 0 sends
 		them back to back. Some ECUs require a nonzero gap at higher baudrates.
 	:param p4_max: optional byte-gap guard for complete framed requests on serial. An expired
-		prefix is abandoned before the checksum and restarted after an idle gap. KWP memory
-		reads also use three bounded response attempts in this mode. None keeps normal behavior.
+		prefix is abandoned before the checksum and restarted after an idle gap.
+		None keeps normal behavior.
 	:param p4_prefix: serial-only paced prefix length, followed by unpaced bursts.
 		Use only when the receiver explicitly supports a burst after its paced header.
 	:param p4_burst_size: maximum bytes per echo-confirmed burst after that prefix.
