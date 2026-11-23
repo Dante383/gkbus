@@ -53,13 +53,39 @@ class Kwp2000Protocol (ProtocolABC):
 		return True # there should be some error checking - but at this stage its hard to determine whether we succeeded
 
 
-	def execute (self, command: Kwp2000Command) -> Kwp2000Response:
+	def execute (self, command: Kwp2000Command, retries: int = 0, timeout: float | None = None) -> Kwp2000Response:
+		'''
+		Execute a command and return the response.
+
+		:param retries: additional attempts after a timeout, only for commands safe to repeat.
+			Negative responses and response-pending waits are not retried
+		:param timeout: seconds to wait for the initial response on each attempt,
+			the transport's timeout if not provided
+		'''
+		if retries < 0:
+			raise ValueError('Retries must be nonnegative')
 		frame = Kwp2000RequestFrame(command.get_service_identifier(), command.get_data())
 
 		with self._execute_lock:
 			if self._resets_timing(command):
 				self._reset_channel_timing()
-			response_pdu = self.transport.send_read_pdu(data=frame.to_pdu())
+			channel = getattr(self.transport, 'channel', None)
+			for attempt in range(retries + 1):
+				try:
+					if timeout is not None:
+						self.transport.send_pdu(frame.to_pdu())
+						response_pdu = self.transport.read_pdu(timeout=timeout)
+					else:
+						response_pdu = self.transport.send_read_pdu(data=frame.to_pdu())
+					break
+				except TimeoutException:
+					if attempt == retries:
+						raise
+					logger.info('Retrying command 0x%02X (%s/%s)', frame.service_identifier, attempt + 1, retries)
+					if isinstance(channel, KLineChannel):
+						# Let a late reply finish before clearing the input and sending again.
+						time.sleep(max(0.060, channel.get_timing().p3_min / 1000))
+						channel.reset_buffers()
 			self._last_execution_time = time.time()
 
 			response = self.handle_errors(

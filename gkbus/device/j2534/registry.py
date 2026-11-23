@@ -8,6 +8,7 @@ import json
 import logging
 import os
 import platform
+import re
 import sys
 from collections.abc import Iterable
 from dataclasses import dataclass, field
@@ -136,9 +137,13 @@ class J2534LibraryInfo:
 		'''
 		Whether the adapter is plugged in. None if that can't be told without opening it
 		'''
-		if not self.profile.usb_ids or sys.platform == 'win32':
+		if not self.profile.usb_ids:
 			return None
-		return any(ids in self.profile.usb_ids for ids in usb_ids())
+		try:
+			return any(ids in self.profile.usb_ids for ids in usb_ids())
+		except OSError as e:
+			logger.debug('Checking USB adapter presence failed: {}'.format(e))
+			return None
 
 def profile_for (*names: str) -> AdapterProfile:
 	text = ' '.join(names).lower()
@@ -211,9 +216,11 @@ def find_library (spec: str | None = None) -> J2534LibraryInfo | None:
 
 def usb_ids () -> list[tuple[int, int]]:
 	'''
-	(vendor id, product id) of connected USB devices - all of them on Linux,
+	(vendor id, product id) of connected USB devices - all of them on Windows and Linux,
 	the ones with a serial port elsewhere
 	'''
+	if sys.platform == 'win32':
+		return _windows_usb_ids()
 	if sys.platform.startswith('linux') and os.path.isdir(USB_DIR):
 		ids = []
 		for device in os.listdir(USB_DIR):
@@ -228,6 +235,35 @@ def usb_ids () -> list[tuple[int, int]]:
 		(port.vid, port.pid) for port in serial.tools.list_ports.comports()
 		if port.vid is not None and port.pid is not None
 	]
+
+
+def _windows_usb_ids () -> list[tuple[int, int]]:
+	'''Query present USB devnodes without loading a driver or opening an adapter.'''
+	from ctypes import wintypes
+
+	manager = ctypes.WinDLL('cfgmgr32')
+	size = manager.CM_Get_Device_ID_List_SizeW
+	size.argtypes = [ctypes.POINTER(wintypes.ULONG), wintypes.LPCWSTR, wintypes.ULONG]
+	size.restype = wintypes.ULONG
+	get_ids = manager.CM_Get_Device_ID_ListW
+	get_ids.argtypes = [wintypes.LPCWSTR, wintypes.LPWSTR, wintypes.ULONG, wintypes.ULONG]
+	get_ids.restype = wintypes.ULONG
+	# CM_GETIDLIST_FILTER_ENUMERATOR | CM_GETIDLIST_FILTER_PRESENT
+	flags = 0x00000001 | 0x00000100
+	for _ in range(3):
+		length = wintypes.ULONG()
+		status = size(ctypes.byref(length), 'USB', flags)
+		if status:
+			raise OSError('CM_Get_Device_ID_List_SizeW failed: 0x{:X}'.format(status))
+		buffer = ctypes.create_unicode_buffer(max(1, length.value))
+		status = get_ids('USB', buffer, len(buffer), flags)
+		if status == 0:
+			return [(int(vid, 16), int(pid, 16)) for vid, pid in re.findall(
+				r'USB\\VID_([0-9A-F]{4})&PID_([0-9A-F]{4})', buffer[:], re.IGNORECASE,
+			)]
+		if status != 0x1A:  # CR_BUFFER_SMALL: device list changed; query its size again.
+			break
+	raise OSError('CM_Get_Device_ID_ListW failed: 0x{:X}'.format(status))
 
 def _from_env () -> list[J2534LibraryInfo]:
 	paths = [x for x in os.environ.get(LIBRARY_ENV, '').split(os.pathsep) if x]

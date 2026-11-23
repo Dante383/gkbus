@@ -1,4 +1,5 @@
 import logging
+import os
 import time
 
 import serial
@@ -29,10 +30,9 @@ class SerialKLineChannel(KLineChannel):
 	K-Line through a serial port (KKL cables and the like), using pyserial.
 	Any pyserial URL works as the port too, e.g. loop:// for testing.
 
-	Of the timing, P3_MIN is kept: a request goes out no sooner than P3_MIN after the last byte
-	came in. That's measured when the bytes reach us, which is always a bit after they were on
-	the bus, so the gap on the bus is never shorter. Requests are sent back to back (P4 = 0)
-	and responses are read by their length, so P1_MAX and P4_MIN aren't used
+	P3_MIN separates requests from the last received byte. P4_MIN optionally spaces request
+	bytes; its default of zero sends them back to back. Responses are read by their length,
+	so P1_MAX isn't used.
 	'''
 
 	def __init__ (
@@ -52,6 +52,8 @@ class SerialKLineChannel(KLineChannel):
 		self.pin = ObdPin(pin)
 		self._serial: serial.SerialBase | None = None
 		self._low_latency = False
+		self._paced_write_active = False
+		self._original_write_timeout = None
 		#: when the last bytes came in (time.perf_counter()), P3_MIN is counted from it
 		self._last_rx = 0.0
 
@@ -66,6 +68,7 @@ class SerialKLineChannel(KLineChannel):
 		try:
 			self._reset_adapter()
 			self._set_kline_mode()
+			self.set_timing(self.timing)
 		except (serial.SerialException, OSError) as e:
 			self.close()
 			raise OpeningChannelException(e) from e
@@ -81,6 +84,7 @@ class SerialKLineChannel(KLineChannel):
 			self._set_low_latency(False)
 			self._low_latency = False
 		port, self._serial = self._serial, None
+		self._paced_write_active = False
 		try:
 			port.break_condition = False
 			port.reset_input_buffer()
@@ -102,10 +106,27 @@ class SerialKLineChannel(KLineChannel):
 		which also means the bytes are out
 		'''
 		port = self._port()
+		if self.timing.p4_max is not None and self.timing.p4_min > 0:
+			return self._write_paced(data)
 		self._wait_p3()
-		bytes_written = port.write(data)
-
-		echo = self._read(bytes_written, self._echo_timeout(bytes_written))
+		if self.timing.p4_min > 0 and len(data) > 1:
+			bytes_written = 0
+			echo = bytearray()
+			for index, byte in enumerate(data):
+				if index:
+					time.sleep(self.timing.p4_min / 1000)
+				part = bytes([byte])
+				written = port.write(part)
+				received = self._read(written, self._echo_timeout(written))
+				if written != 1 or received != part:
+					raise ChannelException('K-Line byte echo missing or different than sent payload')
+				# Wait for the echo before starting P4: USB writes can otherwise
+				# queue together despite sleeps between calls to port.write().
+				bytes_written += written
+				echo.extend(received)
+		else:
+			bytes_written = port.write(data)
+			echo = self._read(bytes_written, self._echo_timeout(bytes_written))
 		if (echo != data):
 			logger.error('K-Line echo different than sent payload! \nPayload: {}\nEcho: {}'.format(
 				' '.join([hex(x) for x in list(data)]),
@@ -113,6 +134,58 @@ class SerialKLineChannel(KLineChannel):
 			))
 
 		return bytes_written
+
+	def _write_paced (self, data: bytes) -> int:
+		'''Finish only complete frames; abandon an expired prefix before its checksum is sent.'''
+		port = self._port()
+		for attempt in range(4):
+			self._wait_p3()
+			for index, byte in enumerate(data):
+				if index:
+					deadline = time.perf_counter() + self.timing.p4_min / 1000
+					while time.perf_counter() < deadline:
+						pass
+					if time.perf_counter() - last > self.timing.p4_max / 1000:
+						logger.info('Abandoning an incomplete request after an excessive byte gap')
+						time.sleep(max(0.060, self.timing.p3_min / 1000))
+						self.reset_buffers()
+						break
+				if self.timing.p4_prefix is not None and index >= self.timing.p4_prefix:
+					# Header echoes and P4 confirm the paced prefix before the burst.
+					for offset in range(index, len(data), self.timing.p4_burst_size):
+						if time.perf_counter() - last > self.timing.p4_max / 1000:
+							# No checksum was sent: let the receiver discard this prefix.
+							logger.info('Abandoning an incomplete burst after an excessive byte gap')
+							time.sleep(max(0.100, self.timing.p3_min / 1000))
+							self.reset_buffers()
+							break
+						remaining = data[offset:offset + self.timing.p4_burst_size]
+						last = time.perf_counter() + len(remaining) * 10 / self.baudrate
+						if port.write(remaining) != len(remaining) or self._read(len(remaining), self._echo_timeout(len(remaining))) != remaining:
+							raise ChannelException('K-Line burst echo missing or different than sent payload')
+					else:
+						return len(data)
+					break
+				part = bytes([byte])
+				last = time.perf_counter()
+				if port.write(part) != 1 or self._read(1, self._echo_timeout(1)) != part:
+					raise ChannelException('K-Line byte echo missing or different than sent payload')
+			else:
+				return len(data)
+		raise ChannelException('Repeated excessive gaps prevented request transmission')
+
+	def set_timing (self, timing: KLineTiming) -> None:
+		super().set_timing(timing)
+		if os.name == 'nt' and self._serial is not None:
+			# The echo confirms transmission. Waiting separately for WriteFile completion
+			# can stall the next byte past the ECU's receive deadline on Windows.
+			if timing.p4_max is not None and not self._paced_write_active:
+				self._original_write_timeout = self._serial.write_timeout
+				self._serial.write_timeout = 0
+				self._paced_write_active = True
+			elif timing.p4_max is None and self._paced_write_active:
+				self._serial.write_timeout = self._original_write_timeout
+				self._paced_write_active = False
 
 	def set_baudrate (self, baudrate: int) -> None:
 		self.baudrate = baudrate

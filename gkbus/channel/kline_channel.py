@@ -8,8 +8,8 @@ from .channel_abc import ChannelABC
 class KLineTiming:
 	'''
 	ISO 14230 timing, in milliseconds. J2534 adapters keep all of it; the serial channel keeps
-	P3_MIN (the gap before a request) and sends request bytes back to back (P4 = 0), so on
-	serial P1_MAX and P4_MIN are ignored
+	P3_MIN (the gap before a request) and P4_MIN (the gap between request bytes).
+	On serial, P1_MAX is ignored.
 
 	:param p1_max: longest gap between the bytes of an ECU response. The adapter treats a longer
 		silence as the end of the response
@@ -19,11 +19,28 @@ class KLineTiming:
 		with AccessTimingParameters it can go much lower - call set_timing() to take advantage.
 		That only lasts until the next StartDiagnosticSession, see KLineChannel.reset_timing()
 	:param p4_min: gap between the bytes of a request. ISO 14230 suggests 5 ms; 0 sends
-		them back to back like a serial adapter does, which every ECU tested so far accepts
+		them back to back. Some ECUs require a nonzero gap at higher baudrates.
+	:param p4_max: optional byte-gap guard for complete framed requests on serial. An expired
+		prefix is abandoned before the checksum and restarted after an idle gap.
+		None keeps normal behavior.
+	:param p4_prefix: serial-only paced prefix length, followed by unpaced bursts.
+		Use only when the receiver explicitly supports a burst after its paced header.
+	:param p4_burst_size: maximum bytes per echo-confirmed burst after that prefix.
 	'''
 	p1_max: float = 20.0
 	p3_min: float = 60.0
 	p4_min: float = 0.0
+	p4_max: float | None = None
+	p4_prefix: int | None = None
+	p4_burst_size: int = 16
+
+	def __post_init__ (self) -> None:
+		if self.p4_max is not None and not 0 <= self.p4_min < self.p4_max:
+			raise ValueError('P4 minimum must be nonnegative and less than its maximum')
+		if self.p4_prefix is not None and (self.p4_prefix < 1 or self.p4_max is None or self.p4_min <= 0):
+			raise ValueError('A paced prefix requires a positive length, gap and P4 maximum')
+		if self.p4_burst_size < 1:
+			raise ValueError('Burst size must be positive')
 
 class KLineChannel(ChannelABC):
 	'''
