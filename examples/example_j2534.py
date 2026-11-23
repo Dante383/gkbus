@@ -41,9 +41,8 @@ def main(library: str | None, bus: str, pin: int, ground: list[int]) -> None:
 				transport = Kwp2000OverCanTransport(device.canbus(), tx_id=0x7E0, rx_id=0x7E8)
 			kwp = kwp2000.Kwp2000Protocol(transport)
 
-			if bus == 'kline':
-				print('fast init')
-				print('fast init : {}'.format(kwp.init(kwp2000.commands.StartCommunication())))
+			# fast init on K-Line; on CAN there's nothing to wake up, it just sets the protocol up
+			print('init: {}'.format(kwp.init(kwp2000.commands.StartCommunication())))
 
 			print('executing ReadEcuIdentification: 0x8c - bootloader version')
 			response = kwp.execute(kwp2000.commands.ReadEcuIdentification(0x8c))

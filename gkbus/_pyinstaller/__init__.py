@@ -1,6 +1,6 @@
 '''
 PyInstaller hooks, found through the pyinstaller40 entry point - apps frozen with gkbus
-get the 32 bit J2534 helper without changes to their spec
+get the J2534 drivers without changes to their spec
 '''
 import os
 

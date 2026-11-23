@@ -59,18 +59,33 @@ Code written against a channel doesn't care which adapter is behind it.
 
 ### J2534
 
-- **Linux / macOS**: install [openport-j2534](https://github.com/bisak/openport-j2534) and
-  its udev rule. It installs `/usr/local/lib/libj2534.so` (`.dylib` on macOS), which gkbus
-  finds on its own, as it does libraries registered in `~/.passthru/*.json`
-- **Windows**: install the vendor's driver (e.g. Tactrix), it registers itself. 32 bit DLLs
-  (like Tactrix's `op20pt32.dll`) work in a 64 bit Python: gkbus loads them in
-  `gkbus_j2534_helper32.exe`, a small 32 bit helper process it ships with. Windows 11 may
-  refuse Tactrix's USB driver; [openport-winusb](https://github.com/prj/openport-winusb)
-  is the usual workaround. Not tested on a real adapter yet
-- Freezing an app with PyInstaller: gkbus' hook bundles the helper, nothing to add to the
-  spec. To rebuild the helper, run `gkbus/device/j2534/helper/build.sh` (needs mingw-w64)
-- Point `GKBUS_J2534_LIBRARY` at a library to use it whether it's registered or not. With
-  openport-j2534, `OPENPORT_LOG=/tmp/openport.log` logs the driver's USB traffic
+gkbus ships [openport-j2534](https://github.com/bisak/openport-j2534), an open source driver
+for the Tactrix OpenPort 2.0, and uses it on every platform - there is no driver to install
+for an OpenPort:
+
+- **Linux** (x86_64): needs libusb-1.0 (`libusb-1.0-0` on Debian / Ubuntu, usually there
+  already) and a udev rule so your user can open the cable, then re-plug it:
+  `echo 'SUBSYSTEM=="usb", ATTR{idVendor}=="0403", ATTR{idProduct}=="cc4d", MODE="0666"' | sudo tee /etc/udev/rules.d/70-openport.rules`
+- **Windows** (32 and 64 bit Python): the cable works with Tactrix's USB driver if it's
+  installed, and with the USB serial driver Windows 10 and later give it otherwise
+- **macOS**, other Linux architectures: no build is shipped yet, install openport-j2534
+  yourself. gkbus finds `libj2534.so` / `libj2534.dylib` in the usual places
+- Remove the cable's microSD card, with one inserted it shows up as a USB disk
+- Other adapters need their vendor's J2534 library: registered in the Windows registry
+  (it has to match the bitness of your Python) or in `~/.passthru/*.json`
+- `j2534` is the first library found: `GKBUS_J2534_LIBRARY`, then the shipped openport-j2534,
+  then installed ones. Installed OpenPort drivers (Tactrix's DLL, another openport-j2534)
+  aren't listed next to the shipped one; to use one anyway, point `GKBUS_J2534_LIBRARY` at
+  it or use `j2534:/path/to/library`
+- `OPENPORT_LOG=/tmp/openport.log` logs openport-j2534's USB traffic
+- Freezing an app with PyInstaller: gkbus' hook bundles the drivers, nothing to add to the
+  spec
+- To update the shipped drivers, run `gkbus/device/j2534/drivers/build.sh` with an
+  openport-j2534 checkout, a release tag and the release's Windows zip, e.g.
+  `build.sh ../openport-j2534 v0.5.0 openport-j2534-v0.5.0-windows.zip`. The Linux library
+  is built from the tag (needs libusb's headers), the DLLs are the release's own.
+  `gkbus/device/j2534/drivers/VERSION` says what is shipped; openport-j2534 is GPL-3.0-or-later
+  like gkbus, its `LICENSE` and `NOTICE` are next to it
 - ISO-TP is done by the adapter. The OpenPort pads frames with `0x00`, not `0xCC`
 - K-Line timing (P1, P3, P4) is kept by the adapter, see `KLineTiming`. Fast baudrates work
   with exact values, e.g. the SIMK43's 19231, 39474, 57692 and 125000 (24 MHz / 16 / {78, 38,

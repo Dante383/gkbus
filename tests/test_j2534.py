@@ -169,7 +169,9 @@ def test_library_binds_installed_library () -> None:
 	library = J2534Library('/usr/local/lib/libj2534.so')
 	assert library.last_error() is not None
 
-def pe_file (path: object, machine: int) -> str:
+def pe_file (path: object, machine: int, mkdir: bool = False) -> str:
+	if mkdir:
+		path.parent.mkdir(parents=True, exist_ok=True)
 	header = bytearray(0x40)
 	header[:2] = b'MZ'
 	struct.pack_into('<I', header, 0x3C, 0x40)
@@ -197,8 +199,10 @@ def test_library_bitness_mismatch_is_explained (
 @pytest.fixture
 def no_libraries (monkeypatch: pytest.MonkeyPatch, tmp_path: object) -> object:
 	'''
-	Nothing installed: no environment variable, registry, ~/.passthru or known paths
+	Nothing installed or shipped: no environment variable, drivers, registry, ~/.passthru
+	or known paths
 	'''
+	monkeypatch.setattr(registry, 'DRIVERS_DIR', str(tmp_path / 'drivers'))
 	monkeypatch.delenv(registry.LIBRARY_ENV, raising=False)
 	monkeypatch.setattr(registry, '_registry_entries', lambda: [])
 	monkeypatch.setattr(registry, 'PASSTHRU_DIR', str(tmp_path / 'passthru'))
@@ -263,14 +267,101 @@ def test_find_libraries_windows_registry (
 		('Kline only', 'x64'),
 	]
 	assert libraries[0].profile is registry.OPENPORT
-	# the 32 bit OpenPort DLL is loaded in the 32 bit helper
-	assert libraries[0].bridged() and not libraries[0].native()
-	monkeypatch.setattr(registry, 'bridge_available', lambda: True)
-	assert libraries[0].loadable()
-	monkeypatch.setattr(registry, 'bridge_available', lambda: False)
-	assert not libraries[0].loadable()
-	assert libraries[1].native() and not libraries[1].bridged()
+	# a 64 bit Python can't load the 32 bit Tactrix DLL
+	assert not libraries[0].native()
+	assert libraries[1].native()
 	assert libraries[1].buses == frozenset({Bus.KLINE})
+
+@pytest.mark.parametrize('platform, machine, python, shipped', [
+	('linux', 'x86_64', 'x64', 'linux-x86_64/libj2534.so'),
+	('linux', 'aarch64', 'arm64', 'linux-aarch64/libj2534.so'),
+	('darwin', 'arm64', 'arm64', 'macos/libj2534.dylib'),
+	('win32', 'AMD64', 'x64', 'win64/openport-j2534-64.dll'),
+	('win32', 'AMD64', 'x86', 'win32/openport-j2534-32.dll'),
+	('win32', 'ARM64', 'arm64', None),
+])
+def test_bundled_library_of_the_platform (
+	no_libraries: object, monkeypatch: pytest.MonkeyPatch,
+	platform: str, machine: str, python: str, shipped: str | None,
+) -> None:
+	drivers = no_libraries / 'drivers'
+	monkeypatch.setattr(registry.sys, 'platform', platform)
+	monkeypatch.setattr(registry.platform, 'machine', lambda: machine)
+	monkeypatch.setattr(registry, 'python_machine', lambda: python)
+	# not shipped for this platform
+	assert registry.bundled_library() is None
+	assert registry.find_libraries() == []
+
+	for directory in ('linux-x86_64', 'linux-aarch64', 'macos'):
+		(drivers / directory).mkdir(parents=True)
+	(drivers / 'linux-x86_64' / 'libj2534.so').write_bytes(b'')
+	(drivers / 'linux-aarch64' / 'libj2534.so').write_bytes(b'')
+	(drivers / 'macos' / 'libj2534.dylib').write_bytes(b'')
+	pe_file((drivers / 'win32').joinpath('openport-j2534-32.dll'), 0x14C, mkdir=True)
+	pe_file((drivers / 'win64').joinpath('openport-j2534-64.dll'), 0x8664, mkdir=True)
+	bundled = registry.bundled_library()
+	if shipped is None:
+		assert bundled is None
+		return
+	assert bundled.path == os.path.join(str(drivers), *shipped.split('/'))
+	assert (bundled.name, bundled.vendor) == ('OpenPort 2.0', 'openport-j2534')
+	assert bundled.profile is registry.OPENPORT and bundled.native()
+	assert registry.find_library() == bundled
+	assert registry.find_library('openport') == bundled
+
+def test_bundled_library_stands_in_for_installed_ones (
+	no_libraries: object, monkeypatch: pytest.MonkeyPatch,
+) -> None:
+	tmp_path = no_libraries
+	monkeypatch.setattr(registry.sys, 'platform', 'win32')
+	monkeypatch.setattr(registry, 'python_machine', lambda: 'x64')
+	bundled = pe_file(
+		(tmp_path / 'drivers' / 'win64').joinpath('openport-j2534-64.dll'), 0x8664, mkdir=True,
+	)
+	tactrix = pe_file(tmp_path / 'op20pt32.dll', 0x14C)
+	registered = pe_file(tmp_path / 'openport-j2534-64.dll', 0x8664)
+	acme = pe_file(tmp_path / 'acme64.dll', 0x8664)
+	monkeypatch.setattr(registry, '_registry_entries', lambda: [
+		{'Name': 'OpenPort 2.0 J2534 ISO/CAN/VPW/PWM', 'Vendor': 'Tactrix Inc.',
+			'FunctionLibrary': tactrix},
+		{'Name': 'OpenPort 2.0 (openport-j2534)', 'FunctionLibrary': registered},
+		{'Name': 'Some Box', 'Vendor': 'Acme', 'FunctionLibrary': acme},
+	])
+	# the OpenPort is listed once, with the shipped driver; other adapters after it
+	assert [x.path for x in registry.find_libraries()] == [bundled, acme]
+	assert registry.find_library('tactrix') is None
+	# by path and through the environment variable the installed ones still work
+	assert registry.find_library(tactrix).path == tactrix
+	monkeypatch.setenv(registry.LIBRARY_ENV, registered)
+	assert [x.path for x in registry.find_libraries()] == [registered, bundled, acme]
+
+def test_shipped_drivers () -> None:
+	'''
+	The drivers in the package are what registry.py expects: built for the right machine,
+	exporting the PassThru functions under their plain names, and loadable here
+	'''
+	drivers = registry.DRIVERS_DIR
+	with open(os.path.join(drivers, 'VERSION')) as file:
+		assert file.read().strip()
+	for name in ('LICENSE', 'NOTICE'):
+		assert os.path.isfile(os.path.join(drivers, name))
+	for directory, name, machine in [
+		('win32', 'openport-j2534-32.dll', 'x86'), ('win64', 'openport-j2534-64.dll', 'x64'),
+	]:
+		path = os.path.join(drivers, directory, name)
+		assert library_machine(path) == machine
+		with open(path, 'rb') as file:
+			content = file.read()
+		for function in j2534_library.FUNCTIONS:
+			# not decorated like __stdcall exports are by default (_PassThruOpen@8)
+			assert function.encode() + b'\0' in content
+			assert b'_' + function.encode() + b'@' not in content
+
+	bundled = registry.bundled_library()
+	if bundled is None:
+		pytest.skip('no driver shipped for this platform')
+	library = J2534Library(bundled.path)
+	assert library.last_error() is not None
 
 def test_library_presence (monkeypatch: pytest.MonkeyPatch, tmp_path: object) -> None:
 	for name, ids in [('1-1', ('0403', 'cc4d')), ('1-2', ('1d50', '606f')), ('usb1', None)]:
@@ -317,7 +408,7 @@ def adapter (monkeypatch: pytest.MonkeyPatch) -> FakeJ2534Library:
 		return [J2534Message(message.protocol, answer_id.to_bytes(4, 'big') + data[::-1])]
 
 	library = FakeJ2534Library(ecu)
-	monkeypatch.setattr(j2534_device, 'load_library', lambda info: library)
+	monkeypatch.setattr(j2534_device, 'J2534Library', lambda path: library)
 	monkeypatch.setattr(j2534_isotp_link, '_padding_noted', set())
 	return library
 
@@ -841,7 +932,7 @@ def test_ground_pins (openport: J2534Device, adapter: FakeJ2534Library) -> None:
 	adapter.calls.clear()
 	openport.close()
 	assert [x[0] for x in adapter.calls] == [
-		'set_programming_voltage', 'set_programming_voltage', 'close', 'unload',
+		'set_programming_voltage', 'set_programming_voltage', 'close',
 	]
 	assert {x[1] for x in adapter.calls_to('set_programming_voltage')} == {VOLTAGE_OFF}
 	assert adapter.grounded == set() and openport.grounded_pins == frozenset()

@@ -207,9 +207,6 @@ class FakeJ2534Library:
 		self.channels.clear()
 		self.grounded.clear()
 
-	def unload (self) -> None:
-		self.calls.append(('unload',))
-
 	def connect (self, device_id: int, protocol: int, flags: int, baudrate: int) -> int:
 		self._call('connect', protocol, flags, baudrate)
 		if protocol not in self.channel_ids:

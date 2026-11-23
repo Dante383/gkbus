@@ -5,7 +5,6 @@ from ...channel import CanFilter, KLineTiming
 from ...exceptions import ChannelException, ChannelNotSupportedException, DeviceException
 from ..device_abc import Bus, DeviceABC
 from ..obd_pin import ObdPin
-from .bridge import load_library
 from .constants import SHORT_TO_GROUND, VOLTAGE_OFF, Status
 from .library import J2534Error, J2534Library
 from .registry import J2534LibraryInfo, find_libraries, find_library
@@ -35,7 +34,8 @@ CANT_GROUND = frozenset({
 class J2534Device(DeviceABC):
 	'''
 	SAE J2534 pass-thru adapter (Tactrix OpenPort 2.0 and others), driven through its
-	J2534 library - Tactrix's DLL on Windows, openport-j2534 on Linux and macOS.
+	J2534 library. gkbus ships openport-j2534 for the OpenPort 2.0, other adapters need
+	their vendor's library installed.
 
 	The library is loaded and the adapter taken (PassThruOpen) when the device is opened,
 	never by discover(). J2534 allows one program to use an adapter at a time.
@@ -85,11 +85,10 @@ class J2534Device(DeviceABC):
 		'''
 		if self._opened:
 			return True
-		library = load_library(self.library)
+		library = J2534Library(self.library.path)
 		try:
 			device_id = library.open()
 		except J2534Error as e:
-			library.unload()
 			raise self._opening_error(e) from e
 		self._library, self._device_id = library, device_id
 		self._opened = True
@@ -119,8 +118,6 @@ class J2534Device(DeviceABC):
 					library.close(device_id)
 				except J2534Error as e:
 					logger.warning('Closing {} failed: {}'.format(self.library.name, e))
-				finally:
-					library.unload()
 
 	def kline (
 		self,
@@ -216,11 +213,10 @@ class J2534Device(DeviceABC):
 		for library in find_libraries():
 			if library.present() is False:
 				continue
-			if not library.loadable():
+			if not library.native():
 				logger.warning(
-					'Skipping J2534 library {}: it is {}, this Python can\'t load it{}'.format(
+					'Skipping J2534 library {}: it is {}, this Python can\'t load it'.format(
 						library.path, library.machine,
-						' and the 32 bit helper is missing' if library.bridged() else '',
 					)
 				)
 				continue

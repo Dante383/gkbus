@@ -7,6 +7,7 @@ import glob
 import json
 import logging
 import os
+import platform
 import sys
 from collections.abc import Iterable
 from dataclasses import dataclass, field
@@ -16,7 +17,6 @@ import serial.tools.list_ports
 
 from ..device_abc import Bus
 from ..obd_pin import ObdPin
-from .bridge import bridge_available
 from .library import library_machine, python_machine
 
 logger = logging.getLogger(__name__)
@@ -34,6 +34,10 @@ KNOWN_PATHS = (
 	'/opt/homebrew/lib/libj2534.dylib',
 )
 USB_DIR = '/sys/bus/usb/devices'
+#: the openport-j2534 builds gkbus ships with, see drivers/build.sh
+DRIVERS_DIR = os.path.join(os.path.dirname(os.path.abspath(__file__)), 'drivers')
+#: vendor of the shipped library
+BUNDLED_VENDOR = 'openport-j2534'
 
 ALL_BUSES = frozenset({Bus.KLINE, Bus.CANBUS})
 #: protocols a library can declare, and the bus they need
@@ -64,7 +68,7 @@ class AdapterProfile:
 
 #: any J2534 adapter - J2534-1 only guarantees grounding pin 15
 GENERIC = AdapterProfile('J2534')
-#: Tactrix OpenPort 2.0, through Tactrix's DLL or openport-j2534. Pins 7, 10 and 15 are grounded by
+#: Tactrix OpenPort 2.0, through openport-j2534 or Tactrix's DLL. Pins 7, 10 and 15 are grounded by
 #: the line drivers; 1, 3, 9, 11, 12 and 13 by the programmable voltage circuit, which some clones
 #: leave out - they acknowledge grounding those pins and leave them as they are
 OPENPORT = AdapterProfile(
@@ -78,7 +82,7 @@ OPENPORT = AdapterProfile(
 	isotp_padding=0x00,
 )
 #: lowercase markers in a library's name, vendor or file name, and the adapter they mean.
-#: libj2534 is what openport-j2534 installs as
+#: libj2534 is what openport-j2534 installs as on Linux and macOS
 PROFILE_MARKERS: list[tuple[tuple[str, ...], AdapterProfile]] = [
 	(('openport', 'tactrix', 'op20pt', 'libj2534'), OPENPORT),
 ]
@@ -123,22 +127,10 @@ class J2534LibraryInfo:
 
 	def native (self) -> bool:
 		'''
-		Whether this Python can load it itself - not a Windows DLL of another architecture
+		Whether this Python can load it - not a Windows DLL of another architecture
+		(e.g. a vendor's 32 bit DLL in a 64 bit Python)
 		'''
 		return self.machine is None or self.machine == python_machine()
-
-	def bridged (self) -> bool:
-		'''
-		Whether it's a 32 bit DLL in a 64 bit Python, which the 32 bit helper loads
-		'''
-		return self.machine == 'x86' and python_machine() != 'x86'
-
-	def loadable (self) -> bool:
-		'''
-		False if it's a Windows DLL neither this Python nor the 32 bit helper can load
-		(e.g. a 64 bit DLL in a 32 bit Python)
-		'''
-		return self.native() or (self.bridged() and bridge_available())
 
 	def present (self) -> bool | None:
 		'''
@@ -155,15 +147,45 @@ def profile_for (*names: str) -> AdapterProfile:
 			return profile
 	return GENERIC
 
+def bundled_library () -> J2534LibraryInfo | None:
+	'''
+	The openport-j2534 build gkbus ships for this platform and architecture,
+	None if it ships none
+	'''
+	if sys.platform == 'win32':
+		location = {
+			'x86': ('win32', 'openport-j2534-32.dll'),
+			'x64': ('win64', 'openport-j2534-64.dll'),
+		}.get(python_machine())
+	elif sys.platform == 'darwin':
+		location = ('macos', 'libj2534.dylib')
+	else:
+		location = ('{}-{}'.format(sys.platform, platform.machine()), 'libj2534.so')
+	if location is None:
+		return None
+	path = os.path.join(DRIVERS_DIR, *location)
+	if not os.path.isfile(path):
+		return None
+	return J2534LibraryInfo.from_path(path, vendor=BUNDLED_VENDOR)
+
 def find_libraries () -> list[J2534LibraryInfo]:
 	'''
-	Installed J2534 libraries: the GKBUS_J2534_LIBRARY environment variable first, then the
-	Windows registry, ~/.passthru/*.json and the usual install paths. A library found
-	in several places is listed once
+	J2534 libraries to use: the GKBUS_J2534_LIBRARY environment variable first, then the
+	openport-j2534 gkbus ships with, then the installed ones - the Windows registry,
+	~/.passthru/*.json and the usual install paths. A library found in several places is
+	listed once.
+
+	Installed libraries for the adapter of the shipped one (Tactrix's DLL, another copy of
+	openport-j2534) are left out, so the adapter is listed once and with the same driver on
+	every platform. They can still be used by path
 	'''
+	installed = [*_from_registry(), *_from_passthru_dir(), *_from_known_paths()]
+	bundled = bundled_library()
+	if bundled is not None:
+		installed = [bundled, *(x for x in installed if x.profile is not bundled.profile)]
 	found: list[J2534LibraryInfo] = []
 	seen: set[str] = set()
-	for library in [*_from_env(), *_from_registry(), *_from_passthru_dir(), *_from_known_paths()]:
+	for library in [*_from_env(), *installed]:
 		key = os.path.normcase(os.path.realpath(library.path))
 		if key in seen:
 			continue
@@ -173,8 +195,8 @@ def find_libraries () -> list[J2534LibraryInfo]:
 
 def find_library (spec: str | None = None) -> J2534LibraryInfo | None:
 	'''
-	:param spec: path of a library, or a part of an installed library's name or vendor
-		(case insensitive). None or empty - the first installed library
+	:param spec: path of a library, or a part of a library's name or vendor
+		(case insensitive). None or empty - the first of find_libraries()
 	'''
 	if spec and os.path.isfile(spec):
 		return J2534LibraryInfo.from_path(spec)

@@ -408,11 +408,6 @@ class J2534Library:
 	def clear_tx_buffer (self, channel_id: int) -> None:
 		self.ioctl(channel_id, Ioctl.CLEAR_TX_BUFFER)
 
-	def unload (self) -> None:
-		'''
-		Done with the library. Does nothing here - ctypes can't unload a library
-		'''
-
 	def _call (self, function: str, *args: object, name: str | None = None) -> None:
 		status = getattr(self._dll, function)(*args)
 		if status != Status.NOERROR:
